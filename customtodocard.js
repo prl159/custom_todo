@@ -6,6 +6,10 @@ class CustomTodoCard extends HTMLElement {
       throw new Error("Either 'tasks' or 'entity' must be provided");
     }
 
+    if (!config.name) {
+      throw new Error("Card 'name' is required to generate unique input_text entity IDs");
+    }
+
     let tasks = [];
 
     if (Array.isArray(config.tasks)) {
@@ -89,8 +93,8 @@ class CustomTodoCard extends HTMLElement {
       </style>
     \`;
 
-    this.attachCheckboxHandlers(tasks, hass);
-    this.attachAddButtonHandler(tasks, hass, config.entity);
+    this.attachCheckboxHandlers(tasks, hass, config.name);
+    this.attachAddButtonHandler(tasks, hass, config.name);
   }
 
   renderTask(task, i) {
@@ -106,7 +110,7 @@ class CustomTodoCard extends HTMLElement {
     \`;
   }
 
-  attachCheckboxHandlers(tasks, hass) {
+  attachCheckboxHandlers(tasks, hass, cardName) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskIdx = parseInt(e.target.dataset.task);
@@ -114,17 +118,18 @@ class CustomTodoCard extends HTMLElement {
         const newTasks = JSON.parse(JSON.stringify(tasks));
         newTasks[taskIdx].checks[checkIdx] = e.target.checked;
 
-        if (this._config.entity) {
-          hass.callService('input_text', 'set_value', {
-            entity_id: this._config.entity,
-            value: JSON.stringify({ tasks: newTasks })
-          });
-        }
+        const taskEntityId = 'input_text.custom_todo_' + cardName + '_' + newTasks[taskIdx].name.toLowerCase().replace(/\s+/g, '_');
+        const value = newTasks[taskIdx].checks.join(',');
+
+        hass.callService('input_text', 'set_value', {
+          entity_id: taskEntityId,
+          value: value
+        });
       });
     });
   }
 
-  attachAddButtonHandler(tasks, hass, entity_id) {
+  attachAddButtonHandler(tasks, hass, cardName) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -132,14 +137,13 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
-      const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      const newTask = { name, checks: [false, false, false, false, false] };
+      const taskEntityId = 'input_text.custom_todo_' + cardName + '_' + name.toLowerCase().replace(/\s+/g, '_');
 
-      if (entity_id) {
-        hass.callService('input_text', 'set_value', {
-          entity_id,
-          value: JSON.stringify({ tasks: updatedTasks })
-        });
-      }
+      hass.callService('input_text', 'set_value', {
+        entity_id: taskEntityId,
+        value: newTask.checks.join(',')
+      });
 
       input.value = '';
     });
@@ -160,5 +164,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
   name: 'Custom Todo Card',
-  description: 'A to-do list with 5 checkboxes per item.'
+  description: 'A to-do list with 5 checkboxes per item, each stored in its own entity.'
 });
