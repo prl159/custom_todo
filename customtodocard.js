@@ -1,9 +1,26 @@
 class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
-    const entity = hass.states[config.entity];
-    const data = this.parseTasks(entity.state);
-    const tasks = data.tasks;
+
+    if (!config.entity) {
+      throw new Error("Entity is required");
+    }
+
+    let tasks = [];
+
+    // Use tasks from config if defined
+    if (Array.isArray(config.tasks)) {
+      tasks = config.tasks;
+    } else {
+      // Fallback to input_text entity state
+      const entity = hass.states[config.entity];
+      try {
+        const data = JSON.parse(entity.state || '{}');
+        tasks = data.tasks || [];
+      } catch {
+        tasks = [];
+      }
+    }
 
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
@@ -71,14 +88,6 @@ class CustomTodoCard extends HTMLElement {
     this.attachAddButtonHandler(tasks, hass, config.entity);
   }
 
-  parseTasks(state) {
-    try {
-      return JSON.parse(state || '{}');
-    } catch {
-      return { tasks: [] };
-    }
-  }
-
   renderTask(task, i) {
     return `
       <div class="task-row">
@@ -128,7 +137,6 @@ class CustomTodoCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity) throw new Error("Entity is required");
     this._config = config;
   }
 
@@ -141,7 +149,7 @@ customElements.define('custom-todo-card', CustomTodoCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: 'custom-todo-card',  // must match the hyphenated name
+  type: 'custom-todo-card',
   name: 'Custom Todo Card',
   description: 'A to-do list with 5 checkboxes per item.'
 });
