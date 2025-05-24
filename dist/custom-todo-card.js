@@ -26,18 +26,18 @@ class CustomTodoCard extends HTMLElement {
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
 
-    this.innerHTML = \`
-      <ha-card header="\${config.title || 'Todo Progress'}">
+    this.innerHTML = `
+      <ha-card header="${config.title || 'Todo Progress'}">
         <div class="card-content">
           <div class="add-row">
             <input id="new-task-input" type="text" placeholder="New task name">
             <button id="add-task-button">Add</button>
           </div>
 
-          \${tasks.length === 0 ? \`<div class="no-tasks">📭 No entities</div>\` : ''}
+          ${tasks.length === 0 ? `<div class="no-tasks">📭 No entities</div>` : ''}
 
-          \${incomplete.length > 0 ? \`<div class="section"><div class="section-title">In Progress</div>\${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>\` : ''}
-          \${completed.length > 0 ? \`<div class="section"><div class="section-title">Completed</div>\${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>\` : ''}
+          ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+          ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
         </div>
       </ha-card>
 
@@ -91,23 +91,23 @@ class CustomTodoCard extends HTMLElement {
           margin-top: 1em;
         }
       </style>
-    \`;
+    `;
 
     this.attachCheckboxHandlers(tasks, hass, config.name);
     this.attachAddButtonHandler(tasks, hass, config.name);
   }
 
   renderTask(task, i) {
-    return \`
+    return `
       <div class="task-row">
-        <div class="task-name">\${task.name}</div>
+        <div class="task-name">${task.name}</div>
         <div class="checkbox-group">
-          \${[0,1,2,3,4].map(j => \`
-            <input type="checkbox" \${task.checks[j] ? 'checked' : ''} data-task="\${i}" data-check="\${j}">
-          \`).join('')}
+          ${[0,1,2,3,4].map(j => `
+            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-task="${i}" data-check="${j}">
+          `).join('')}
         </div>
       </div>
-    \`;
+    `;
   }
 
   attachCheckboxHandlers(tasks, hass, cardName) {
