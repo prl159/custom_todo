@@ -137,11 +137,11 @@ class CustomTodoCard extends HTMLElement {
   }
 }
 
+customElements.define('customtodocard', CustomTodoCard);
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'customtodocard',
   name: 'Custom Todo Card',
-  description: 'A custom to-do card with 5 checkboxes',
-  preview: false
+  description: 'A to-do list with 5 checkboxes per item.'
 });
-customElements.define('customtodocard', CustomTodoCard);
