@@ -1,6 +1,6 @@
 {
   "name": "Custom Todo Card",
-  "filename": "customtodocard.js",
+  "filename": "custom-todo-card.js",
   "type": "plugin",
   "render_readme": true
 }
