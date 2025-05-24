@@ -2,20 +2,17 @@ class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
 
-    if (!config.entity) {
-      throw new Error("Entity is required");
+    if (!Array.isArray(config.tasks) && !config.entity) {
+      throw new Error("Either 'tasks' or 'entity' must be provided");
     }
 
     let tasks = [];
 
-    // Use tasks from config if defined
     if (Array.isArray(config.tasks)) {
       tasks = config.tasks;
-    } else {
-      // Fallback to input_text entity state
-      const entity = hass.states[config.entity];
+    } else if (config.entity && hass.states[config.entity]) {
       try {
-        const data = JSON.parse(entity.state || '{}');
+        const data = JSON.parse(hass.states[config.entity].state || '{}');
         tasks = data.tasks || [];
       } catch {
         tasks = [];
@@ -25,16 +22,18 @@ class CustomTodoCard extends HTMLElement {
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
 
-    this.innerHTML = `
-      <ha-card header="${config.title || 'Todo Progress'}">
+    this.innerHTML = \`
+      <ha-card header="\${config.title || 'Todo Progress'}">
         <div class="card-content">
           <div class="add-row">
             <input id="new-task-input" type="text" placeholder="New task name">
             <button id="add-task-button">Add</button>
           </div>
 
-          ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
-          ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+          \${tasks.length === 0 ? \`<div class="no-tasks">📭 No entities</div>\` : ''}
+
+          \${incomplete.length > 0 ? \`<div class="section"><div class="section-title">In Progress</div>\${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>\` : ''}
+          \${completed.length > 0 ? \`<div class="section"><div class="section-title">Completed</div>\${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>\` : ''}
         </div>
       </ha-card>
 
@@ -81,24 +80,30 @@ class CustomTodoCard extends HTMLElement {
           border-radius: 4px;
           cursor: pointer;
         }
+        .no-tasks {
+          text-align: center;
+          color: var(--secondary-text-color);
+          font-style: italic;
+          margin-top: 1em;
+        }
       </style>
-    `;
+    \`;
 
     this.attachCheckboxHandlers(tasks, hass);
     this.attachAddButtonHandler(tasks, hass, config.entity);
   }
 
   renderTask(task, i) {
-    return `
+    return \`
       <div class="task-row">
-        <div class="task-name">${task.name}</div>
+        <div class="task-name">\${task.name}</div>
         <div class="checkbox-group">
-          ${[0,1,2,3,4].map(j => `
-            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-task="${i}" data-check="${j}">
-          `).join('')}
+          \${[0,1,2,3,4].map(j => \`
+            <input type="checkbox" \${task.checks[j] ? 'checked' : ''} data-task="\${i}" data-check="\${j}">
+          \`).join('')}
         </div>
       </div>
-    `;
+    \`;
   }
 
   attachCheckboxHandlers(tasks, hass) {
@@ -109,10 +114,12 @@ class CustomTodoCard extends HTMLElement {
         const newTasks = JSON.parse(JSON.stringify(tasks));
         newTasks[taskIdx].checks[checkIdx] = e.target.checked;
 
-        hass.callService('input_text', 'set_value', {
-          entity_id: this._config.entity,
-          value: JSON.stringify({ tasks: newTasks })
-        });
+        if (this._config.entity) {
+          hass.callService('input_text', 'set_value', {
+            entity_id: this._config.entity,
+            value: JSON.stringify({ tasks: newTasks })
+          });
+        }
       });
     });
   }
@@ -127,10 +134,12 @@ class CustomTodoCard extends HTMLElement {
 
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
 
-      hass.callService('input_text', 'set_value', {
-        entity_id,
-        value: JSON.stringify({ tasks: updatedTasks })
-      });
+      if (entity_id) {
+        hass.callService('input_text', 'set_value', {
+          entity_id,
+          value: JSON.stringify({ tasks: updatedTasks })
+        });
+      }
 
       input.value = '';
     });
