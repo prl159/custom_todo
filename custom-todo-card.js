@@ -1,7 +1,5 @@
 class CustomTodoCard extends HTMLElement {
   set hass(hass) {
-    console.log("Card set hass() triggered");
-
     const config = this._config;
     if (!config.name) throw new Error("Card 'name' is required");
 
@@ -10,13 +8,14 @@ class CustomTodoCard extends HTMLElement {
 
     let tasks = entity?.attributes?.tasks || [];
 
-    // Ensure each task has a persistent ID
+    // Add persistent ID if missing
     tasks = tasks.map(task => ({
       ...task,
       id: task.id ?? `${task.name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`
     }));
 
-    console.log("Rendering with task list:", tasks);
+    // Sort alphabetically (case-insensitive)
+    tasks.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput?.value ?? '';
@@ -54,9 +53,21 @@ class CustomTodoCard extends HTMLElement {
           border-bottom: 1px solid var(--divider-color, #e0e0e0);
         }
         .task-name { flex-grow: 1; font-size: 1rem; }
+        .checkbox-group {
+          display: flex;
+          align-items: center;
+        }
         .checkbox-group input {
           margin-left: 6px;
           transform: scale(1.2);
+        }
+        .delete-btn {
+          background: none;
+          border: none;
+          color: var(--error-color, red);
+          font-size: 1.2rem;
+          margin-left: 10px;
+          cursor: pointer;
         }
         .section-title {
           font-size: 0.9rem;
@@ -109,6 +120,7 @@ class CustomTodoCard extends HTMLElement {
 
     this.attachCheckboxHandlers(hass, entityId, tasks);
     this.attachAddButtonHandler(hass, entityId, tasks);
+    this.attachDeleteButtonHandlers(hass, entityId, tasks);
   }
 
   renderTask(task) {
@@ -119,6 +131,7 @@ class CustomTodoCard extends HTMLElement {
           ${[0, 1, 2, 3, 4].map(j => `
             <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-id="${task.id}" data-name="${task.name}" data-check="${j}">
           `).join('')}
+          <button class="delete-btn" data-id="${task.id}" title="Remove task">✖</button>
         </div>
       </div>
     `;
@@ -135,7 +148,6 @@ class CustomTodoCard extends HTMLElement {
         if (!task) return;
 
         task.checks[checkIdx] = e.target.checked;
-        console.log("Checkbox updated:", task);
         this.publishTasks(hass, entityId, tasks);
       });
     });
@@ -151,8 +163,6 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
-      console.log("Add button clicked");
-
       const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
       if (alreadyExists) {
         alert("A task with this name already exists.");
@@ -166,9 +176,18 @@ class CustomTodoCard extends HTMLElement {
       };
 
       const updatedTasks = [...tasks, newTask];
-      console.log("Sending task to script:", updatedTasks);
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
+    });
+  }
+
+  attachDeleteButtonHandlers(hass, entityId, tasks) {
+    this.querySelectorAll('.delete-btn').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const taskId = e.target.dataset.id;
+        const updatedTasks = tasks.filter(t => t.id !== taskId);
+        this.publishTasks(hass, entityId, updatedTasks);
+      });
     });
   }
 
@@ -176,15 +195,10 @@ class CustomTodoCard extends HTMLElement {
     const topicBase = entityId.replace("sensor.custom_todo_", "");
     const topic = `home/custom_todo/${topicBase}/attributes`;
 
-    console.log("Calling script.set_custom_todo_mqtt with:", { topic, tasks });
-    try {
-      hass.callService("script", "set_custom_todo_mqtt", {
-        topic,
-        tasks
-      });
-    } catch (err) {
-      console.error("Failed to call script.set_custom_todo_mqtt:", err);
-    }
+    hass.callService("script", "set_custom_todo_mqtt", {
+      topic,
+      tasks
+    });
   }
 
   setConfig(config) {
@@ -201,6 +215,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (Final)',
-  description: 'Simplified, persistent card with robust ID-based task tracking'
+  name: 'Custom Todo Card (Sorted & Deletable)',
+  description: 'Alphabetically sorted task list with checkbox tracking and delete buttons'
 });
