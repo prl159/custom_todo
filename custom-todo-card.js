@@ -149,11 +149,12 @@ class CustomTodoCard extends HTMLElement {
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
-    hass.callService("mqtt", "publish", {
+  
+    hass.callService("script", "set_custom_todo_mqtt", {
       topic: `home/custom_todo/${topicBase}/attributes`,
-      payload: JSON.stringify({ tasks }),
-      retain: true
+      tasks: tasks
     });
+  
     hass.callService("mqtt", "publish", {
       topic: `home/custom_todo/${topicBase}/state`,
       payload: "OK",
