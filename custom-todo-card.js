@@ -159,6 +159,7 @@ class CustomTodoCard extends HTMLElement {
   }
 
 
+
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
 
