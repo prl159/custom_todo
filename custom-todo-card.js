@@ -7,7 +7,6 @@ class CustomTodoCard extends HTMLElement {
 
     const entityId = 'input_text.custom_todo_' + config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
 
-    // Preserve current input value
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput ? existingInput.value : '';
 
@@ -170,6 +169,8 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
+      const normalizedName = name.toLowerCase();
+
       let allTasks = [];
       try {
         const raw = hass.states[entityId].state;
@@ -177,6 +178,12 @@ class CustomTodoCard extends HTMLElement {
         allTasks = parsed.tasks || [];
       } catch {
         allTasks = [];
+      }
+
+      const alreadyExists = allTasks.some(t => t.name.toLowerCase() === normalizedName);
+      if (alreadyExists) {
+        alert("A task with this name already exists.");
+        return;
       }
 
       allTasks.push({ name, checks: [false, false, false, false, false] });
