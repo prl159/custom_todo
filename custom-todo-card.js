@@ -1,12 +1,15 @@
 class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
-
     if (!config.name) {
       throw new Error("Card 'name' is required to persist task data.");
     }
 
     const entityId = 'input_text.custom_todo_' + config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+
+    // 🛠 Preserve input value across renders
+    const existingInput = this.querySelector?.('#new-task-input');
+    const inputValue = existingInput ? existingInput.value : '';
 
     let tasks = [];
     if (hass.states[entityId]) {
@@ -102,6 +105,10 @@ class CustomTodoCard extends HTMLElement {
       </style>
     `;
 
+    // 🧠 Restore input value after render
+    const newInput = this.querySelector('#new-task-input');
+    if (newInput) newInput.value = inputValue;
+
     if (!hass.states[entityId]) {
       this.querySelector('#create-entity').addEventListener('click', () => {
         hass.callService('script', 'create_todo_entity', {
@@ -147,13 +154,13 @@ class CustomTodoCard extends HTMLElement {
   attachAddButtonHandler(hass, entityId) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
-  
+
     button.addEventListener('click', () => {
       const name = input.value.trim();
       if (!name) return;
-  
+
       let allTasks = [];
-  
+
       try {
         const state = hass.states[entityId].state || '{}';
         const parsed = JSON.parse(state);
@@ -161,17 +168,17 @@ class CustomTodoCard extends HTMLElement {
       } catch {
         allTasks = [];
       }
-  
+
       const updatedTasks = [...allTasks, {
         name,
         checks: [false, false, false, false, false]
       }];
-  
+
       hass.callService('input_text', 'set_value', {
         entity_id: entityId,
         value: JSON.stringify({ tasks: updatedTasks })
       });
-  
+
       input.value = '';
     });
   }
