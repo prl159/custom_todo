@@ -10,10 +10,11 @@ class CustomTodoCard extends HTMLElement {
     const tasks = entity?.attributes?.tasks || [];
 
     const taskJson = JSON.stringify(tasks);
-    if (taskJson === this._lastTaskJson) {
+    if (this._lastTaskJson && taskJson === this._lastTaskJson) {
       console.log("No changes in task list. Skipping re-render.");
       return;
     }
+    console.log("Rendering with task list:", tasks);
     this._lastTaskJson = taskJson;
 
     const existingInput = this.querySelector?.('#new-task-input');
@@ -172,7 +173,7 @@ class CustomTodoCard extends HTMLElement {
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
-
+    console.log("Publishing via MQTT:", tasks);
     hass.callService("script", "set_custom_todo_mqtt", {
       topic: `home/custom_todo/${topicBase}/attributes`,
       tasks: tasks
