@@ -1,42 +1,47 @@
 class CustomTodoCard extends HTMLElement {
   set hass(hass) {
+    console.log("Card set hass() triggered");
+
     const config = this._config;
-    if (!config.name) {
-      throw new Error("Card 'name' is required");
-    }
+    if (!config.name) throw new Error("Card 'name' is required");
 
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
     const entity = hass.states[entityId];
-
-    // Preserve the input value between refreshes
-    const existingInput = this.querySelector?.('#new-task-input');
-    const inputValue = existingInput ? existingInput.value : '';
-
     const tasks = entity?.attributes?.tasks || [];
+
+    const taskJson = JSON.stringify(tasks);
+    if (taskJson === this._lastTaskJson) {
+      console.log("No changes in task list. Skipping re-render.");
+      return;
+    }
+    this._lastTaskJson = taskJson;
+
+    const existingInput = this.querySelector?.('#new-task-input');
+    const inputValue = existingInput?.value ?? '';
+    const wasFocused = document.activeElement === existingInput;
 
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
 
     this.innerHTML = `
-      <ha-card header="${config.title || 'Custom Todo'}">
+      <ha-card header="\${config.title || 'Custom Todo'}">
         <div class="card-content">
-          ${!entity ? `
+          \${!entity ? \`
             <div class="warning">
-              🚫 Entity <code>${entityId}</code> not found.
-            </div>` : `
+              🚫 Entity <code>\${entityId}</code> not found.
+            </div>\` : \`
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
             </div>
 
-            ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
+            \${tasks.length === 0 ? \`<div class="no-tasks">📭 No tasks</div>\` : ''}
 
-            ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task) => this.renderTask(task)).join('')}</div>` : ''}
-            ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task) => this.renderTask(task)).join('')}</div>` : ''}
-          `}
+            \${incomplete.length > 0 ? \`<div class="section"><div class="section-title">In Progress</div>\${incomplete.map((task) => this.renderTask(task)).join('')}</div>\` : ''}
+            \${completed.length > 0 ? \`<div class="section"><div class="section-title">Completed</div>\${completed.map((task) => this.renderTask(task)).join('')}</div>\` : ''}
+          \`}
         </div>
       </ha-card>
-
       <style>
         .card-content { padding: 0 16px 16px; }
         .task-row {
@@ -90,7 +95,13 @@ class CustomTodoCard extends HTMLElement {
     `;
 
     const inputBox = this.querySelector('#new-task-input');
-    if (inputBox) inputBox.value = inputValue;
+    if (inputBox) {
+      inputBox.value = inputValue;
+      if (wasFocused) {
+        inputBox.focus();
+        inputBox.setSelectionRange(inputValue.length, inputValue.length);
+      }
+    }
 
     if (!entity) return;
 
@@ -99,16 +110,16 @@ class CustomTodoCard extends HTMLElement {
   }
 
   renderTask(task) {
-    return `
+    return \`
       <div class="task-row">
-        <div class="task-name">${task.name}</div>
+        <div class="task-name">\${task.name}</div>
         <div class="checkbox-group">
-          ${[0,1,2,3,4].map(j => `
-            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-name="${task.name}" data-check="${j}">
-          `).join('')}
+          \${[0,1,2,3,4].map(j => \`
+            <input type="checkbox" \${task.checks[j] ? 'checked' : ''} data-name="\${task.name}" data-check="\${j}">
+          \`).join('')}
         </div>
       </div>
-    `;
+    \`;
   }
 
   attachCheckboxHandlers(hass, entityId) {
@@ -123,7 +134,8 @@ class CustomTodoCard extends HTMLElement {
         if (!task) return;
 
         task.checks[checkIdx] = e.target.checked;
-
+        console.log("Checkbox updated:", tasks);
+        this._lastTaskJson = '';
         this.publishTasks(hass, entityId, tasks);
       });
     });
@@ -139,6 +151,8 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
+      console.log("Add button clicked");
+
       const entity = hass.states[entityId];
       const tasks = JSON.parse(JSON.stringify(entity?.attributes?.tasks || []));
 
@@ -149,6 +163,8 @@ class CustomTodoCard extends HTMLElement {
       }
 
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      console.log("Sending task to script:", updatedTasks);
+      this._lastTaskJson = '';
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
@@ -177,6 +193,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (MQTT)',
-  description: 'Stores all tasks in MQTT sensor attributes via backend script'
+  name: 'Custom Todo Card (MQTT + Logs)',
+  description: 'Debug version: logs to console and forces re-render on add'
 });
