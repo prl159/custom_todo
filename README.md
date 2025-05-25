@@ -1,20 +1,25 @@
 # Custom Todo Card
 
-A Lovelace card for Home Assistant that allows you to manage tasks with 5 checkboxes per item, grouped into "In Progress" and "Completed."
+A Lovelace card for Home Assistant that tracks to-do tasks, each with 5 checkboxes. Tasks are stored centrally in a single `input_text` entity per card.
 
-## Features
+---
 
-- Add tasks directly from the UI
-- 5 progress checkboxes per task
-- Grouped view for "In Progress" and "Completed"
-- Stores state in `input_text.custom_todo`
+## ✅ Features
 
-## Installation
+- Add unlimited to-do items
+- Each item includes 5 checkbox slots
+- Completed and In Progress sections
+- Task data is stored centrally in Home Assistant
+- State survives reboots and syncs across all devices
+- One `input_text.custom_todo_<name>` per card instance
 
-1. Add this repo as a custom repository in HACS (see below)
-2. Install the card via HACS → Frontend
-3. Add the resource manually if needed:
+---
+
+## 🚀 Usage
+
+### 1. Card Configuration (Lovelace YAML or UI)
 
 ```yaml
-- url: /hacsfiles/custom_todo/dist/customtodocard.js
-  type: module
+type: custom:custom-todo-card
+title: Baby Tasks
+name: baby_tasks
