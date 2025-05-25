@@ -1,13 +1,16 @@
 class CustomTodoCard extends HTMLElement {
   constructor() {
     super();
-    this._expandedGroups = {};
-    this._showCompleted = false;
+    const stored = JSON.parse(localStorage.getItem("custom_todo_expand_state") || "{}");
+    this._expandedGroups = stored.groups || {};
+    this._showCompleted = stored.completed ?? false;
   }
 
   set hass(hass) {
+    this._hass = hass;
     const config = this._config;
     const groupCols = config.no_grouped_columns || 1;
+
     if (!config.name) throw new Error("Card 'name' is required");
 
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
@@ -40,10 +43,10 @@ class CustomTodoCard extends HTMLElement {
       const open = this._expandedGroups[type] ?? true;
       return `
         <div class="group">
-          <div class="group-title" data-group="${type}">
+          <h3 class="group-title" data-group="${type}">
             <span class="caret">${open ? "▼" : "▶"}</span> ${type}
-          </div>
-          <div class="group-tasks" style="display:${open ? "grid" : "none"}; grid-template-columns: repeat(${groupCols}, 1fr); gap: 8px;">
+          </h3>
+          <div class="group-tasks" data-container="${type}" style="display:${open ? "grid" : "none"}; grid-template-columns: repeat(auto-fill, minmax(calc(100% / ${groupCols}), 1fr)); gap: 8px;">
             ${items.map(task => this.renderTask(task)).join('')}
           </div>
         </div>
@@ -53,10 +56,10 @@ class CustomTodoCard extends HTMLElement {
     const completedOpen = this._showCompleted;
     const completedHtml = `
       <div class="group">
-        <div class="group-title" data-completed>
+        <h2 class="group-title" data-completed>
           <span class="caret">${completedOpen ? "▼" : "▶"}</span> Completed
-        </div>
-        <div class="group-tasks" style="display:${completedOpen ? "block" : "none"};">
+        </h2>
+        <div class="group-tasks" data-container="completed" style="display:${completedOpen ? "block" : "none"};">
           ${completed.map(task => this.renderTask(task)).join('')}
         </div>
       </div>
@@ -74,7 +77,7 @@ class CustomTodoCard extends HTMLElement {
             </div>
 
             ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
-
+            <h2 class="section-title">In Progress</h2>
             ${groupHtml}
             ${completed.length > 0 ? completedHtml : ''}
           `}
@@ -107,18 +110,15 @@ class CustomTodoCard extends HTMLElement {
           cursor: pointer;
         }
         .group-title {
-          font-weight: bold;
-          margin: 12px 0 6px;
+          margin: 16px 0 8px;
           cursor: pointer;
+        }
+        .section-title {
+          margin: 24px 0 12px;
         }
         .caret {
           font-size: 0.9rem;
           margin-right: 4px;
-        }
-        .section-title {
-          font-size: 0.9rem;
-          font-weight: bold;
-          margin: 16px 0 4px;
         }
         .add-row {
           display: flex;
@@ -149,6 +149,11 @@ class CustomTodoCard extends HTMLElement {
           border-radius: 4px;
           margin: 8px 0;
           font-size: 0.9rem;
+        }
+        @media (max-width: 600px) {
+          .group-tasks {
+            grid-template-columns: 1fr !important;
+          }
         }
       </style>
     `;
@@ -242,18 +247,29 @@ class CustomTodoCard extends HTMLElement {
       el.addEventListener('click', () => {
         const group = el.dataset.group;
         this._expandedGroups[group] = !this._expandedGroups[group];
-        this.setConfig(this._config); // trigger re-render
-        this.hass = this._hass;
+        this._saveExpandState();
+        const container = this.querySelector(`[data-container="${group}"]`);
+        if (container) container.style.display = this._expandedGroups[group] ? 'grid' : 'none';
+        el.querySelector('.caret').textContent = this._expandedGroups[group] ? '▼' : '▶';
       });
     });
 
     this.querySelectorAll('[data-completed]').forEach(el => {
       el.addEventListener('click', () => {
         this._showCompleted = !this._showCompleted;
-        this.setConfig(this._config);
-        this.hass = this._hass;
+        this._saveExpandState();
+        const container = this.querySelector('[data-container="completed"]');
+        if (container) container.style.display = this._showCompleted ? 'block' : 'none';
+        el.querySelector('.caret').textContent = this._showCompleted ? '▼' : '▶';
       });
     });
+  }
+
+  _saveExpandState() {
+    localStorage.setItem("custom_todo_expand_state", JSON.stringify({
+      groups: this._expandedGroups,
+      completed: this._showCompleted
+    }));
   }
 
   publishTasks(hass, entityId, tasks) {
@@ -279,6 +295,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (Grouped + Expandable)',
-  description: 'Todo card with grouping, multi-column layout, and collapsible sections'
+  name: 'Custom Todo Card',
+  description: 'Todo card with groups, animation, persistent state, and responsive layout'
 });
