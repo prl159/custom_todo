@@ -10,6 +10,9 @@ class CustomTodoCard extends HTMLElement {
       throw new Error("Card 'name' is required to generate unique input_text entity IDs");
     }
 
+    const sanitize = (str) =>
+      str.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+
     let tasks = [];
 
     if (Array.isArray(config.tasks)) {
@@ -93,8 +96,8 @@ class CustomTodoCard extends HTMLElement {
       </style>
     `;
 
-    this.attachCheckboxHandlers(tasks, hass, config.name);
-    this.attachAddButtonHandler(tasks, hass, config.name);
+    this.attachCheckboxHandlers(tasks, hass, config.name, sanitize);
+    this.attachAddButtonHandler(tasks, hass, config.name, sanitize);
   }
 
   renderTask(task, i) {
@@ -110,7 +113,7 @@ class CustomTodoCard extends HTMLElement {
     `;
   }
 
-  attachCheckboxHandlers(tasks, hass, cardName) {
+  attachCheckboxHandlers(tasks, hass, cardName, sanitize) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskIdx = parseInt(e.target.dataset.task);
@@ -118,7 +121,7 @@ class CustomTodoCard extends HTMLElement {
         const newTasks = JSON.parse(JSON.stringify(tasks));
         newTasks[taskIdx].checks[checkIdx] = e.target.checked;
 
-        const taskEntityId = 'input_text.custom_todo_' + cardName + '_' + newTasks[taskIdx].name.toLowerCase().replace(/\s+/g, '_');
+        const taskEntityId = 'input_text.custom_todo_' + sanitize(cardName) + '_' + sanitize(newTasks[taskIdx].name);
         const value = newTasks[taskIdx].checks.join(',');
 
         hass.callService('input_text', 'set_value', {
@@ -129,7 +132,7 @@ class CustomTodoCard extends HTMLElement {
     });
   }
 
-  attachAddButtonHandler(tasks, hass, cardName) {
+  attachAddButtonHandler(tasks, hass, cardName, sanitize) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -138,7 +141,7 @@ class CustomTodoCard extends HTMLElement {
       if (!name) return;
 
       const newTask = { name, checks: [false, false, false, false, false] };
-      const taskEntityId = 'input_text.custom_todo_' + cardName + '_' + name.toLowerCase().replace(/\s+/g, '_');
+      const taskEntityId = 'input_text.custom_todo_' + sanitize(cardName) + '_' + sanitize(name);
 
       hass.callService('input_text', 'set_value', {
         entity_id: taskEntityId,
