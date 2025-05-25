@@ -7,7 +7,7 @@ class CustomTodoCard extends HTMLElement {
 
     const entityId = 'input_text.custom_todo_' + config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
 
-    // 🛠 Preserve input value across renders
+    // Preserve current input value
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput ? existingInput.value : '';
 
@@ -39,8 +39,8 @@ class CustomTodoCard extends HTMLElement {
 
             ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
 
-            ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
-            ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+            ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task) => this.renderTask(task)).join('')}</div>` : ''}
+            ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task) => this.renderTask(task)).join('')}</div>` : ''}
           `}
         </div>
       </ha-card>
@@ -105,12 +105,11 @@ class CustomTodoCard extends HTMLElement {
       </style>
     `;
 
-    // 🧠 Restore input value after render
-    const newInput = this.querySelector('#new-task-input');
-    if (newInput) newInput.value = inputValue;
+    const inputBox = this.querySelector('#new-task-input');
+    if (inputBox) inputBox.value = inputValue;
 
     if (!hass.states[entityId]) {
-      this.querySelector('#create-entity').addEventListener('click', () => {
+      this.querySelector('#create-entity')?.addEventListener('click', () => {
         hass.callService('script', 'create_todo_entity', {
           name: config.name
         });
@@ -118,38 +117,46 @@ class CustomTodoCard extends HTMLElement {
       return;
     }
 
-    this.attachCheckboxHandlers(tasks, hass, entityId);
+    this.attachCheckboxHandlers(hass, entityId);
     this.attachAddButtonHandler(hass, entityId);
   }
 
-  renderTask(task, i) {
+  renderTask(task) {
     return `
       <div class="task-row">
         <div class="task-name">${task.name}</div>
         <div class="checkbox-group">
           ${[0,1,2,3,4].map(j => `
-            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-task="${i}" data-check="${j}">
+            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-name="${task.name}" data-check="${j}">
           `).join('')}
         </div>
       </div>
     `;
   }
 
-  attachCheckboxHandlers(tasks, hass, entityId) {
+  attachCheckboxHandlers(hass, entityId) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskName = e.target.dataset.name;
         const checkIdx = parseInt(e.target.dataset.check);
-  
-        const newTasks = JSON.parse(JSON.stringify(tasks));
-        const taskToUpdate = newTasks.find(t => t.name === taskName);
+
+        let allTasks = [];
+        try {
+          const raw = hass.states[entityId].state;
+          const parsed = JSON.parse(raw || '{}');
+          allTasks = parsed.tasks || [];
+        } catch {
+          allTasks = [];
+        }
+
+        const taskToUpdate = allTasks.find(t => t.name === taskName);
         if (!taskToUpdate) return;
-  
+
         taskToUpdate.checks[checkIdx] = e.target.checked;
-  
+
         hass.callService('input_text', 'set_value', {
           entity_id: entityId,
-          value: JSON.stringify({ tasks: newTasks })
+          value: JSON.stringify({ tasks: allTasks })
         });
       });
     });
@@ -164,23 +171,19 @@ class CustomTodoCard extends HTMLElement {
       if (!name) return;
 
       let allTasks = [];
-
       try {
-        const state = hass.states[entityId].state || '{}';
-        const parsed = JSON.parse(state);
+        const raw = hass.states[entityId].state;
+        const parsed = JSON.parse(raw || '{}');
         allTasks = parsed.tasks || [];
       } catch {
         allTasks = [];
       }
 
-      const updatedTasks = [...allTasks, {
-        name,
-        checks: [false, false, false, false, false]
-      }];
+      allTasks.push({ name, checks: [false, false, false, false, false] });
 
       hass.callService('input_text', 'set_value', {
         entity_id: entityId,
-        value: JSON.stringify({ tasks: updatedTasks })
+        value: JSON.stringify({ tasks: allTasks })
       });
 
       input.value = '';
