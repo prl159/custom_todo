@@ -2,25 +2,17 @@ class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
 
-    if (!Array.isArray(config.tasks) && !config.entity) {
-      throw new Error("Either 'tasks' or 'entity' must be provided");
-    }
-
     if (!config.name) {
-      throw new Error("Card 'name' is required to generate unique input_text entity IDs");
+      throw new Error("Card 'name' is required to persist task data.");
     }
 
-    const sanitize = (str) =>
-      str.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    const entityId = 'input_text.custom_todo_' + config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
 
     let tasks = [];
-
-    if (Array.isArray(config.tasks)) {
-      tasks = config.tasks;
-    } else if (config.entity && hass.states[config.entity]) {
+    if (hass.states[entityId]) {
       try {
-        const data = JSON.parse(hass.states[config.entity].state || '{}');
-        tasks = data.tasks || [];
+        const parsed = JSON.parse(hass.states[entityId].state || '{}');
+        tasks = parsed.tasks || [];
       } catch {
         tasks = [];
       }
@@ -30,17 +22,23 @@ class CustomTodoCard extends HTMLElement {
     const completed = tasks.filter(t => t.checks.every(c => c));
 
     this.innerHTML = `
-      <ha-card header="${config.title || 'Todo Progress'}">
+      <ha-card header="${config.title || 'Custom Todo'}">
         <div class="card-content">
-          <div class="add-row">
-            <input id="new-task-input" type="text" placeholder="New task name">
-            <button id="add-task-button">Add</button>
-          </div>
+          ${!hass.states[entityId] ? `
+            <div class="warning">
+              🛠 Entity <code>${entityId}</code> not found.<br>
+              <button id="create-entity">Create it</button>
+            </div>` : `
+            <div class="add-row">
+              <input id="new-task-input" type="text" placeholder="New task name">
+              <button id="add-task-button">Add</button>
+            </div>
 
-          ${tasks.length === 0 ? `<div class="no-tasks">📭 No entities</div>` : ''}
+            ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
 
-          ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
-          ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+            ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+            ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task, i) => this.renderTask(task, i)).join('')}</div>` : ''}
+          `}
         </div>
       </ha-card>
 
@@ -62,13 +60,11 @@ class CustomTodoCard extends HTMLElement {
         .checkbox-group input {
           margin-left: 6px;
           transform: scale(1.2);
-          accent-color: var(--primary-color);
         }
         .section-title {
           font-size: 0.9rem;
           font-weight: bold;
           margin: 16px 0 4px;
-          color: var(--primary-text-color);
         }
         .add-row {
           display: flex;
@@ -91,13 +87,32 @@ class CustomTodoCard extends HTMLElement {
           text-align: center;
           color: var(--secondary-text-color);
           font-style: italic;
-          margin-top: 1em;
+        }
+        .warning {
+          background: #fff3cd;
+          padding: 12px;
+          border: 1px solid #ffeeba;
+          border-radius: 4px;
+          margin: 8px 0;
+          font-size: 0.9rem;
+        }
+        .warning button {
+          margin-top: 6px;
         }
       </style>
     `;
 
-    this.attachCheckboxHandlers(tasks, hass, config.name, sanitize);
-    this.attachAddButtonHandler(tasks, hass, config.name, sanitize);
+    if (!hass.states[entityId]) {
+      this.querySelector('#create-entity').addEventListener('click', () => {
+        hass.callService('script', 'create_todo_entity', {
+          name: config.name
+        });
+      });
+      return;
+    }
+
+    this.attachCheckboxHandlers(tasks, hass, entityId);
+    this.attachAddButtonHandler(tasks, hass, entityId);
   }
 
   renderTask(task, i) {
@@ -113,7 +128,7 @@ class CustomTodoCard extends HTMLElement {
     `;
   }
 
-  attachCheckboxHandlers(tasks, hass, cardName, sanitize) {
+  attachCheckboxHandlers(tasks, hass, entityId) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskIdx = parseInt(e.target.dataset.task);
@@ -121,18 +136,15 @@ class CustomTodoCard extends HTMLElement {
         const newTasks = JSON.parse(JSON.stringify(tasks));
         newTasks[taskIdx].checks[checkIdx] = e.target.checked;
 
-        const taskEntityId = 'input_text.custom_todo_' + sanitize(cardName) + '_' + sanitize(newTasks[taskIdx].name);
-        const value = newTasks[taskIdx].checks.join(',');
-
         hass.callService('input_text', 'set_value', {
-          entity_id: taskEntityId,
-          value: value
+          entity_id: entityId,
+          value: JSON.stringify({ tasks: newTasks })
         });
       });
     });
   }
 
-  attachAddButtonHandler(tasks, hass, cardName, sanitize) {
+  attachAddButtonHandler(tasks, hass, entityId) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -140,12 +152,11 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
-      const newTask = { name, checks: [false, false, false, false, false] };
-      const taskEntityId = 'input_text.custom_todo_' + sanitize(cardName) + '_' + sanitize(name);
+      const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
 
       hass.callService('input_text', 'set_value', {
-        entity_id: taskEntityId,
-        value: newTask.checks.join(',')
+        entity_id: entityId,
+        value: JSON.stringify({ tasks: updatedTasks })
       });
 
       input.value = '';
@@ -167,5 +178,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
   name: 'Custom Todo Card',
-  description: 'A to-do list with 5 checkboxes per item, each stored in its own entity.'
+  description: 'Stores all tasks in a single input_text.custom_todo_<name> entity.'
 });
