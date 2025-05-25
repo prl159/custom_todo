@@ -24,21 +24,21 @@ class CustomTodoCard extends HTMLElement {
     const completed = tasks.filter(t => t.checks.every(c => c));
 
     this.innerHTML = `
-      <ha-card header="\${config.title || 'Custom Todo'}">
+      <ha-card header="${config.title || 'Custom Todo'}">
         <div class="card-content">
-          \${!entity ? `
+          ${!entity ? `
             <div class="warning">
-              🚫 Entity <code>\${entityId}</code> not found.
+              🚫 Entity <code>${entityId}</code> not found.
             </div>` : `
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
             </div>
 
-            \${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
+            ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
 
-            \${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>\${incomplete.map((task) => this.renderTask(task)).join('')}</div>` : ''}
-            \${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>\${completed.map((task) => this.renderTask(task)).join('')}</div>` : ''}
+            ${incomplete.length > 0 ? `<div class="section"><div class="section-title">In Progress</div>${incomplete.map((task) => this.renderTask(task)).join('')}</div>` : ''}
+            ${completed.length > 0 ? `<div class="section"><div class="section-title">Completed</div>${completed.map((task) => this.renderTask(task)).join('')}</div>` : ''}
           `}
         </div>
       </ha-card>
@@ -112,10 +112,10 @@ class CustomTodoCard extends HTMLElement {
   renderTask(task) {
     return `
       <div class="task-row">
-        <div class="task-name">\${task.name}</div>
+        <div class="task-name">${task.name}</div>
         <div class="checkbox-group">
-          \${[0,1,2,3,4].map(j => `
-            <input type="checkbox" \${task.checks[j] ? 'checked' : ''} data-name="\${task.name}" data-check="\${j}">
+          ${[0, 1, 2, 3, 4].map(j => `
+            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-name="${task.name}" data-check="${j}">
           `).join('')}
         </div>
       </div>
