@@ -129,22 +129,35 @@ class CustomTodoCard extends HTMLElement {
   attachAddButtonHandler(hass, entityId, tasks) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
-
+  
+    if (!input || !button) {
+      console.warn("Add button or input not found");
+      return;
+    }
+  
     button.addEventListener('click', () => {
+      console.log("Add button clicked");
+  
       const name = input.value.trim();
-      if (!name) return;
-
+      if (!name) {
+        console.warn("Empty task name");
+        return;
+      }
+  
       const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
       if (alreadyExists) {
         alert("A task with this name already exists.");
         return;
       }
-
+  
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      console.log("Calling script.set_custom_todo_mqtt with:", updatedTasks);
+  
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
   }
+
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
