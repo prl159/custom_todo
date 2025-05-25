@@ -147,40 +147,35 @@ class CustomTodoCard extends HTMLElement {
   attachAddButtonHandler(hass, entityId) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
-  
+
     button.addEventListener('click', () => {
       const name = input.value.trim();
       if (!name) return;
-  
+
       let currentTasks = [];
-  
-      // ✅ Always fetch latest state before appending
-      if (hass.states[entityId]) {
-        try {
-          const parsed = JSON.parse(hass.states[entityId].state || '{}');
-          currentTasks = parsed.tasks || [];
-        } catch {
-          currentTasks = [];
-        }
+
+      // Always fetch the latest state from HA
+      try {
+        const raw = hass.states[entityId].state;
+        const parsed = JSON.parse(raw || '{}');
+        currentTasks = parsed.tasks || [];
+      } catch {
+        currentTasks = [];
       }
-  
+
       const updatedTasks = [...currentTasks, {
         name,
         checks: [false, false, false, false, false]
       }];
-  
-      // ✅ Save full updated list
+
       hass.callService('input_text', 'set_value', {
         entity_id: entityId,
         value: JSON.stringify({ tasks: updatedTasks })
       });
-  
+
       input.value = '';
-      // Optionally force re-render or reload after save:
-      // setTimeout(() => location.reload(), 300);
     });
   }
-
 
   setConfig(config) {
     this._config = config;
