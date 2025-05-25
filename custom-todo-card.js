@@ -7,13 +7,20 @@ class CustomTodoCard extends HTMLElement {
 
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
     const entity = hass.states[entityId];
-    const tasks = entity?.attributes?.tasks || [];
 
+    let tasks = this._overrideTasks || entity?.attributes?.tasks || [];
     const taskJson = JSON.stringify(tasks);
+
+    if (this._overrideTasks && JSON.stringify(entity?.attributes?.tasks || []) === taskJson) {
+      console.log("HA state has caught up. Clearing overrideTasks.");
+      this._overrideTasks = null;
+    }
+
     if (this._lastTaskJson && taskJson === this._lastTaskJson) {
       console.log("No changes in task list. Skipping re-render.");
       return;
     }
+
     console.log("Rendering with task list:", tasks);
     this._lastTaskJson = taskJson;
 
@@ -137,6 +144,7 @@ class CustomTodoCard extends HTMLElement {
         task.checks[checkIdx] = e.target.checked;
         console.log("Checkbox updated:", tasks);
         this._lastTaskJson = '';
+        this._overrideTasks = tasks;
         this.publishTasks(hass, entityId, tasks);
       });
     });
@@ -166,6 +174,7 @@ class CustomTodoCard extends HTMLElement {
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
       console.log("Sending task to script:", updatedTasks);
       this._lastTaskJson = '';
+      this._overrideTasks = updatedTasks;
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
@@ -194,6 +203,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (MQTT + Logs)',
-  description: 'Debug version: logs to console and forces re-render on add'
+  name: 'Custom Todo Card (MQTT + Override)',
+  description: 'Tracks changes before HA state updates to prevent flicker or reversion'
 });
