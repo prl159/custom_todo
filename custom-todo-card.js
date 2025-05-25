@@ -182,11 +182,19 @@ class CustomTodoCard extends HTMLElement {
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
-    console.log("Publishing via MQTT:", tasks);
-    hass.callService("script", "set_custom_todo_mqtt", {
-      topic: `home/custom_todo/${topicBase}/attributes`,
-      tasks: tasks
-    });
+    const topic = `home/custom_todo/${topicBase}/attributes`;
+    const payload = {
+      topic,
+      tasks
+    };
+
+    console.log("Calling script.set_custom_todo_mqtt with:", payload);
+
+    try {
+      hass.callService("script", "set_custom_todo_mqtt", payload);
+    } catch (err) {
+      console.error("Failed to call script.set_custom_todo_mqtt:", err);
+    }
   }
 
   setConfig(config) {
@@ -203,6 +211,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (MQTT + Override)',
-  description: 'Tracks changes before HA state updates to prevent flicker or reversion'
+  name: 'Custom Todo Card (Debug Service)',
+  description: 'Card with logging to verify script service execution'
 });
