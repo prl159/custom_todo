@@ -112,7 +112,7 @@ class CustomTodoCard extends HTMLElement {
     }
 
     this.attachCheckboxHandlers(tasks, hass, entityId);
-    this.attachAddButtonHandler(tasks, hass, entityId);
+    this.attachAddButtonHandler(hass, entityId);
   }
 
   renderTask(task, i) {
@@ -144,7 +144,7 @@ class CustomTodoCard extends HTMLElement {
     });
   }
 
-  attachAddButtonHandler(tasks, hass, entityId) {
+  attachAddButtonHandler(hass, entityId) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -152,7 +152,16 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
-      const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      let currentTasks = [];
+      try {
+        const state = hass.states[entityId].state;
+        const parsed = JSON.parse(state || '{}');
+        currentTasks = parsed.tasks || [];
+      } catch {
+        currentTasks = [];
+      }
+
+      const updatedTasks = [...currentTasks, { name, checks: [false, false, false, false, false] }];
 
       hass.callService('input_text', 'set_value', {
         entity_id: entityId,
