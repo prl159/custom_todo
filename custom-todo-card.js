@@ -142,23 +142,16 @@ class CustomTodoCard extends HTMLElement {
 
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
       this.publishTasks(hass, entityId, updatedTasks);
-
       input.value = '';
     });
   }
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
-  
+
     hass.callService("script", "set_custom_todo_mqtt", {
       topic: `home/custom_todo/${topicBase}/attributes`,
       tasks: tasks
-    });
-  
-    hass.callService("mqtt", "publish", {
-      topic: `home/custom_todo/${topicBase}/state`,
-      payload: "OK",
-      retain: true
     });
   }
 
@@ -177,5 +170,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
   name: 'Custom Todo Card (MQTT)',
-  description: 'Stores all tasks in MQTT sensor attributes'
+  description: 'Stores all tasks in MQTT sensor attributes via backend script'
 });
