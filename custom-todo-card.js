@@ -8,21 +8,15 @@ class CustomTodoCard extends HTMLElement {
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
     const entity = hass.states[entityId];
 
-    let tasks = this._overrideTasks || entity?.attributes?.tasks || [];
-    const taskJson = JSON.stringify(tasks);
+    let tasks = entity?.attributes?.tasks || [];
 
-    if (this._overrideTasks && JSON.stringify(entity?.attributes?.tasks || []) === taskJson) {
-      console.log("HA state has caught up. Clearing overrideTasks.");
-      this._overrideTasks = null;
-    }
-
-    if (this._lastTaskJson && taskJson === this._lastTaskJson) {
-      console.log("No changes in task list. Skipping re-render.");
-      return;
-    }
+    // Ensure each task has a persistent ID
+    tasks = tasks.map(task => ({
+      ...task,
+      id: task.id ?? `${task.name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`
+    }));
 
     console.log("Rendering with task list:", tasks);
-    this._lastTaskJson = taskJson;
 
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput?.value ?? '';
@@ -113,8 +107,8 @@ class CustomTodoCard extends HTMLElement {
 
     if (!entity) return;
 
-    this.attachCheckboxHandlers(hass, entityId);
-    this.attachAddButtonHandler(hass, entityId);
+    this.attachCheckboxHandlers(hass, entityId, tasks);
+    this.attachAddButtonHandler(hass, entityId, tasks);
   }
 
   renderTask(task) {
@@ -123,34 +117,31 @@ class CustomTodoCard extends HTMLElement {
         <div class="task-name">${task.name}</div>
         <div class="checkbox-group">
           ${[0, 1, 2, 3, 4].map(j => `
-            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-name="${task.name}" data-check="${j}">
+            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-id="${task.id}" data-name="${task.name}" data-check="${j}">
           `).join('')}
         </div>
       </div>
     `;
   }
 
-  attachCheckboxHandlers(hass, entityId) {
+  attachCheckboxHandlers(hass, entityId, tasks) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
+        const taskId = e.target.dataset.id;
         const taskName = e.target.dataset.name;
         const checkIdx = parseInt(e.target.dataset.check);
 
-        const entity = hass.states[entityId];
-        const tasks = JSON.parse(JSON.stringify(entity?.attributes?.tasks || []));
-        const task = tasks.find(t => t.name === taskName);
+        const task = tasks.find(t => t.id === taskId && t.name === taskName);
         if (!task) return;
 
         task.checks[checkIdx] = e.target.checked;
-        console.log("Checkbox updated:", tasks);
-        this._lastTaskJson = '';
-        this._overrideTasks = tasks;
+        console.log("Checkbox updated:", task);
         this.publishTasks(hass, entityId, tasks);
       });
     });
   }
 
-  attachAddButtonHandler(hass, entityId) {
+  attachAddButtonHandler(hass, entityId, tasks) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -162,19 +153,20 @@ class CustomTodoCard extends HTMLElement {
 
       console.log("Add button clicked");
 
-      const entity = hass.states[entityId];
-      const tasks = JSON.parse(JSON.stringify(entity?.attributes?.tasks || []));
-
       const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
       if (alreadyExists) {
         alert("A task with this name already exists.");
         return;
       }
 
-      const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      const newTask = {
+        name,
+        checks: [false, false, false, false, false],
+        id: `${name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`
+      };
+
+      const updatedTasks = [...tasks, newTask];
       console.log("Sending task to script:", updatedTasks);
-      this._lastTaskJson = '';
-      this._overrideTasks = updatedTasks;
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
@@ -183,15 +175,13 @@ class CustomTodoCard extends HTMLElement {
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.custom_todo_", "");
     const topic = `home/custom_todo/${topicBase}/attributes`;
-    const payload = {
-      topic,
-      tasks
-    };
 
-    console.log("Calling script.set_custom_todo_mqtt with:", payload);
-
+    console.log("Calling script.set_custom_todo_mqtt with:", { topic, tasks });
     try {
-      hass.callService("script", "set_custom_todo_mqtt", payload);
+      hass.callService("script", "set_custom_todo_mqtt", {
+        topic,
+        tasks
+      });
     } catch (err) {
       console.error("Failed to call script.set_custom_todo_mqtt:", err);
     }
@@ -211,6 +201,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (Debug Service)',
-  description: 'Card with logging to verify script service execution'
+  name: 'Custom Todo Card (Final)',
+  description: 'Simplified, persistent card with robust ID-based task tracking'
 });
