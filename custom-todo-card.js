@@ -2,23 +2,15 @@ class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
     if (!config.name) {
-      throw new Error("Card 'name' is required to persist task data.");
+      throw new Error("Card 'name' is required");
     }
 
-    const entityId = 'input_text.custom_todo_' + config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
 
+    const entity = hass.states[entityId];
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput ? existingInput.value : '';
-
-    let tasks = [];
-    if (hass.states[entityId]) {
-      try {
-        const parsed = JSON.parse(hass.states[entityId].state || '{}');
-        tasks = parsed.tasks || [];
-      } catch {
-        tasks = [];
-      }
-    }
+    const tasks = entity?.attributes?.tasks || [];
 
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
@@ -26,10 +18,9 @@ class CustomTodoCard extends HTMLElement {
     this.innerHTML = `
       <ha-card header="${config.title || 'Custom Todo'}">
         <div class="card-content">
-          ${!hass.states[entityId] ? `
+          ${!entity ? `
             <div class="warning">
-              🛠 Entity <code>${entityId}</code> not found.<br>
-              <button id="create-entity">Create it</button>
+              🚫 Entity <code>${entityId}</code> not found.
             </div>` : `
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
@@ -45,9 +36,7 @@ class CustomTodoCard extends HTMLElement {
       </ha-card>
 
       <style>
-        .card-content {
-          padding: 0 16px 16px;
-        }
+        .card-content { padding: 0 16px 16px; }
         .task-row {
           display: flex;
           justify-content: space-between;
@@ -55,10 +44,7 @@ class CustomTodoCard extends HTMLElement {
           padding: 8px 0;
           border-bottom: 1px solid var(--divider-color, #e0e0e0);
         }
-        .task-name {
-          flex-grow: 1;
-          font-size: 1rem;
-        }
+        .task-name { flex-grow: 1; font-size: 1rem; }
         .checkbox-group input {
           margin-left: 6px;
           transform: scale(1.2);
@@ -98,26 +84,16 @@ class CustomTodoCard extends HTMLElement {
           margin: 8px 0;
           font-size: 0.9rem;
         }
-        .warning button {
-          margin-top: 6px;
-        }
       </style>
     `;
 
     const inputBox = this.querySelector('#new-task-input');
     if (inputBox) inputBox.value = inputValue;
 
-    if (!hass.states[entityId]) {
-      this.querySelector('#create-entity')?.addEventListener('click', () => {
-        hass.callService('script', 'create_todo_entity', {
-          name: config.name
-        });
-      });
-      return;
-    }
+    if (!entity) return;
 
-    this.attachCheckboxHandlers(hass, entityId);
-    this.attachAddButtonHandler(hass, entityId);
+    this.attachCheckboxHandlers(hass, entityId, tasks);
+    this.attachAddButtonHandler(hass, entityId, tasks);
   }
 
   renderTask(task) {
@@ -133,35 +109,24 @@ class CustomTodoCard extends HTMLElement {
     `;
   }
 
-  attachCheckboxHandlers(hass, entityId) {
+  attachCheckboxHandlers(hass, entityId, tasks) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskName = e.target.dataset.name;
         const checkIdx = parseInt(e.target.dataset.check);
 
-        let allTasks = [];
-        try {
-          const raw = hass.states[entityId].state;
-          const parsed = JSON.parse(raw || '{}');
-          allTasks = parsed.tasks || [];
-        } catch {
-          allTasks = [];
-        }
+        const updatedTasks = JSON.parse(JSON.stringify(tasks));
+        const task = updatedTasks.find(t => t.name === taskName);
+        if (!task) return;
 
-        const taskToUpdate = allTasks.find(t => t.name === taskName);
-        if (!taskToUpdate) return;
+        task.checks[checkIdx] = e.target.checked;
 
-        taskToUpdate.checks[checkIdx] = e.target.checked;
-
-        hass.callService('input_text', 'set_value', {
-          entity_id: entityId,
-          value: JSON.stringify({ tasks: allTasks })
-        });
+        this.publishTasks(hass, entityId, updatedTasks);
       });
     });
   }
 
-  attachAddButtonHandler(hass, entityId) {
+  attachAddButtonHandler(hass, entityId, tasks) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
 
@@ -169,31 +134,30 @@ class CustomTodoCard extends HTMLElement {
       const name = input.value.trim();
       if (!name) return;
 
-      const normalizedName = name.toLowerCase();
-
-      let allTasks = [];
-      try {
-        const raw = hass.states[entityId].state;
-        const parsed = JSON.parse(raw || '{}');
-        allTasks = parsed.tasks || [];
-      } catch {
-        allTasks = [];
-      }
-
-      const alreadyExists = allTasks.some(t => t.name.toLowerCase() === normalizedName);
+      const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
       if (alreadyExists) {
         alert("A task with this name already exists.");
         return;
       }
 
-      allTasks.push({ name, checks: [false, false, false, false, false] });
-
-      hass.callService('input_text', 'set_value', {
-        entity_id: entityId,
-        value: JSON.stringify({ tasks: allTasks })
-      });
+      const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
+      this.publishTasks(hass, entityId, updatedTasks);
 
       input.value = '';
+    });
+  }
+
+  publishTasks(hass, entityId, tasks) {
+    const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
+    hass.callService("mqtt", "publish", {
+      topic: `home/custom_todo/${topicBase}/attributes`,
+      payload: JSON.stringify({ tasks }),
+      retain: true
+    });
+    hass.callService("mqtt", "publish", {
+      topic: `home/custom_todo/${topicBase}/state`,
+      payload: "OK",
+      retain: true
     });
   }
 
@@ -211,6 +175,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card',
-  description: 'Stores all tasks in a single input_text.custom_todo_<name> entity.'
+  name: 'Custom Todo Card (MQTT)',
+  description: 'Stores all tasks in MQTT sensor attributes'
 });
