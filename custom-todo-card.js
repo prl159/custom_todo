@@ -6,10 +6,12 @@ class CustomTodoCard extends HTMLElement {
     }
 
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
-
     const entity = hass.states[entityId];
+
+    // Preserve the input value between refreshes
     const existingInput = this.querySelector?.('#new-task-input');
     const inputValue = existingInput ? existingInput.value : '';
+
     const tasks = entity?.attributes?.tasks || [];
 
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
@@ -92,8 +94,8 @@ class CustomTodoCard extends HTMLElement {
 
     if (!entity) return;
 
-    this.attachCheckboxHandlers(hass, entityId, tasks);
-    this.attachAddButtonHandler(hass, entityId, tasks);
+    this.attachCheckboxHandlers(hass, entityId);
+    this.attachAddButtonHandler(hass, entityId);
   }
 
   renderTask(task) {
@@ -109,56 +111,48 @@ class CustomTodoCard extends HTMLElement {
     `;
   }
 
-  attachCheckboxHandlers(hass, entityId, tasks) {
+  attachCheckboxHandlers(hass, entityId) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
         const taskName = e.target.dataset.name;
         const checkIdx = parseInt(e.target.dataset.check);
 
-        const updatedTasks = JSON.parse(JSON.stringify(tasks));
-        const task = updatedTasks.find(t => t.name === taskName);
+        const entity = hass.states[entityId];
+        const tasks = JSON.parse(JSON.stringify(entity?.attributes?.tasks || []));
+        const task = tasks.find(t => t.name === taskName);
         if (!task) return;
 
         task.checks[checkIdx] = e.target.checked;
 
-        this.publishTasks(hass, entityId, updatedTasks);
+        this.publishTasks(hass, entityId, tasks);
       });
     });
   }
 
-  attachAddButtonHandler(hass, entityId, tasks) {
+  attachAddButtonHandler(hass, entityId) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
-  
-    if (!input || !button) {
-      console.warn("Add button or input not found");
-      return;
-    }
-  
+
+    if (!input || !button) return;
+
     button.addEventListener('click', () => {
-      console.log("Add button clicked");
-  
       const name = input.value.trim();
-      if (!name) {
-        console.warn("Empty task name");
-        return;
-      }
-  
+      if (!name) return;
+
+      const entity = hass.states[entityId];
+      const tasks = JSON.parse(JSON.stringify(entity?.attributes?.tasks || []));
+
       const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
       if (alreadyExists) {
         alert("A task with this name already exists.");
         return;
       }
-  
+
       const updatedTasks = [...tasks, { name, checks: [false, false, false, false, false] }];
-      console.log("Calling script.set_custom_todo_mqtt with:", updatedTasks);
-  
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
   }
-
-
 
   publishTasks(hass, entityId, tasks) {
     const topicBase = entityId.replace("sensor.", "").replace(/_/g, "/");
