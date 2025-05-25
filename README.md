@@ -16,5 +16,5 @@ A Lovelace card for Home Assistant that allows you to manage tasks with 5 checkb
 3. Add the resource manually if needed:
 
 ```yaml
-- url: /hacsfiles/custom_todo/customtodocard.js
+- url: /hacsfiles/custom_todo/dist/customtodocard.js
   type: module
