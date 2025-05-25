@@ -138,11 +138,15 @@ class CustomTodoCard extends HTMLElement {
   attachCheckboxHandlers(tasks, hass, entityId) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', (e) => {
-        const taskIdx = parseInt(e.target.dataset.task);
+        const taskName = e.target.dataset.name;
         const checkIdx = parseInt(e.target.dataset.check);
+  
         const newTasks = JSON.parse(JSON.stringify(tasks));
-        newTasks[taskIdx].checks[checkIdx] = e.target.checked;
-
+        const taskToUpdate = newTasks.find(t => t.name === taskName);
+        if (!taskToUpdate) return;
+  
+        taskToUpdate.checks[checkIdx] = e.target.checked;
+  
         hass.callService('input_text', 'set_value', {
           entity_id: entityId,
           value: JSON.stringify({ tasks: newTasks })
