@@ -1,4 +1,11 @@
 class CustomTodoCard extends HTMLElement {
+  constructor() {
+    super();
+    this.sectionStates = { 'In Progress': true, 'Completed': true };
+    this.groupStates = {};
+    this.filterText = '';
+  }
+
   set hass(hass) {
     const config = this._config;
     if (!config.name) throw new Error("Card 'name' is required");
@@ -7,7 +14,9 @@ class CustomTodoCard extends HTMLElement {
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
     const entity = hass.states[entityId];
     const existingInput = this.querySelector?.('#new-task-input');
+    const existingFilter = this.querySelector?.('#search-task-input');
     const inputValue = existingInput ? existingInput.value : '';
+    const filterValue = existingFilter ? existingFilter.value : this.filterText;
     const tasks = entity?.attributes?.tasks || [];
 
     this.innerHTML = `
@@ -17,6 +26,9 @@ class CustomTodoCard extends HTMLElement {
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
+            </div>
+            <div class="search-row">
+              <input id="search-task-input" type="text" placeholder="Search tasks..." value="${filterValue}">
             </div>
             <div class="section" id="in-progress-section"></div>
             <div class="section" id="completed-section"></div>
@@ -38,10 +50,22 @@ class CustomTodoCard extends HTMLElement {
           margin-left: 6px;
           transform: scale(1.2);
         }
-        h2 { margin-top: 1.5em; margin-bottom: 0.5em; font-size: 1.2em; }
-        h3 { margin-top: 1em; margin-bottom: 0.2em; font-size: 1em; }
-        .add-row { display: flex; gap: 8px; margin-bottom: 16px; }
-        .add-row input { flex-grow: 1; padding: 6px 8px; }
+        h2.toggle, h3.toggle {
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        h2.toggle::before, h3.toggle::before {
+          content: '\25BC';
+          display: inline-block;
+          transition: transform 0.2s ease-in-out;
+        }
+        h2.toggle.collapsed::before, h3.toggle.collapsed::before {
+          transform: rotate(-90deg);
+        }
+        .add-row, .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .add-row input, .search-row input { flex-grow: 1; padding: 6px 8px; }
         .add-row button {
           background: var(--primary-color);
           color: white;
@@ -70,6 +94,14 @@ class CustomTodoCard extends HTMLElement {
     if (inputBox) inputBox.value = inputValue;
     if (!entity) return;
 
+    const searchInput = this.querySelector('#search-task-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.filterText = e.target.value.trim().toLowerCase();
+        this.setHass(this._hass);
+      });
+    }
+
     setTimeout(() => {
       this.renderGroupedTasks(tasks, ticks);
       this.attachCheckboxHandlers(hass, entityId, tasks);
@@ -78,8 +110,11 @@ class CustomTodoCard extends HTMLElement {
   }
 
   renderGroupedTasks(tasks, ticks) {
-    const inProgress = tasks.filter(t => !t.checks.every(c => c));
-    const completed = tasks.filter(t => t.checks.every(c => c));
+    const filter = this.filterText;
+    const visibleTasks = filter ? tasks.filter(t => t.name.toLowerCase().includes(filter)) : tasks;
+
+    const inProgress = visibleTasks.filter(t => !t.checks.every(c => c));
+    const completed = visibleTasks.filter(t => t.checks.every(c => c));
 
     const groupByType = (arr) => {
       return arr.reduce((acc, task) => {
@@ -101,19 +136,48 @@ class CustomTodoCard extends HTMLElement {
       </div>
     `;
 
-    const renderGrouped = (tasks) => {
+    const renderGrouped = (tasks, section) => {
       const grouped = groupByType(tasks);
-      return Object.entries(grouped).map(([type, items]) => `
-        <h3>${type}</h3>
-        ${items.map(renderTask).join('')}
-      `).join('');
+      return Object.entries(grouped).map(([type, items]) => {
+        const groupId = `${section}-${type}`.replace(/\s+/g, '_');
+        const collapsed = this.groupStates[groupId] === false;
+        return `
+          <h3 class="toggle ${collapsed ? 'collapsed' : ''}" data-group-id="${groupId}">${type}</h3>
+          <div class="group-content" style="display: ${collapsed ? 'none' : 'block'}" data-group-id="${groupId}">
+            ${items.map(renderTask).join('')}
+          </div>
+        `;
+      }).join('');
     };
 
-    this.querySelector('#in-progress-section').innerHTML = inProgress.length
-      ? `<h2>In Progress</h2>${renderGrouped(inProgress)}` : '';
+    const setSection = (id, label, tasks) => {
+      const sectionEl = this.querySelector(`#${id}`);
+      const collapsed = this.sectionStates[label] === false;
+      sectionEl.innerHTML = tasks.length
+        ? `<h2 class="toggle ${collapsed ? 'collapsed' : ''}" data-section="${label}">${label}</h2>
+           <div class="section-content" style="display: ${collapsed ? 'none' : 'block'}">
+             ${renderGrouped(tasks, label)}
+           </div>` : '';
+    };
 
-    this.querySelector('#completed-section').innerHTML = completed.length
-      ? `<h2>Completed</h2>${renderGrouped(completed)}` : '';
+    setSection('in-progress-section', 'In Progress', inProgress);
+    setSection('completed-section', 'Completed', completed);
+
+    this.querySelectorAll('h2.toggle').forEach(h2 => {
+      h2.addEventListener('click', () => {
+        const label = h2.dataset.section;
+        this.sectionStates[label] = !this.sectionStates[label];
+        this.setHass(this._hass);
+      });
+    });
+
+    this.querySelectorAll('h3.toggle').forEach(h3 => {
+      h3.addEventListener('click', () => {
+        const groupId = h3.dataset.groupId;
+        this.groupStates[groupId] = !this.groupStates[groupId];
+        this.setHass(this._hass);
+      });
+    });
   }
 
   attachCheckboxHandlers(hass, entityId, tasks) {
@@ -161,6 +225,11 @@ class CustomTodoCard extends HTMLElement {
     this._config = config;
   }
 
+  setHass(hass) {
+    this._hass = hass;
+    this.hass = hass;
+  }
+
   getCardSize() {
     return 3;
   }
@@ -172,5 +241,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
   name: 'Custom Todo Card (MQTT)',
-  description: 'Grouped by type, stored in MQTT via backend script'
+  description: 'Grouped by type, collapsible, filterable, stored in MQTT via backend script'
 });
