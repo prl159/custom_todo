@@ -2,6 +2,7 @@ class CustomTodoCard extends HTMLElement {
   set hass(hass) {
     const config = this._config;
     if (!config.name) throw new Error("Card 'name' is required");
+    const ticks = Number(config.no_of_ticks || 1);
 
     const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
     const entity = hass.states[entityId];
@@ -70,13 +71,13 @@ class CustomTodoCard extends HTMLElement {
     if (!entity) return;
 
     setTimeout(() => {
-      this.renderGroupedTasks(tasks);
+      this.renderGroupedTasks(tasks, ticks);
       this.attachCheckboxHandlers(hass, entityId, tasks);
-      this.attachAddButtonHandler(hass, entityId, tasks);
+      this.attachAddButtonHandler(hass, entityId, tasks, ticks);
     }, 0);
   }
 
-  renderGroupedTasks(tasks) {
+  renderGroupedTasks(tasks, ticks) {
     const inProgress = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
 
@@ -93,7 +94,7 @@ class CustomTodoCard extends HTMLElement {
       <div class="task-row">
         <div class="task-name">${task.name}</div>
         <div class="checkbox-group">
-          ${[0,1,2,3,4].map(j => `
+          ${Array.from({ length: ticks }).map((_, j) => `
             <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-name="${task.name}" data-check="${j}">
           `).join('')}
         </div>
@@ -129,10 +130,11 @@ class CustomTodoCard extends HTMLElement {
     });
   }
 
-  attachAddButtonHandler(hass, entityId, tasks) {
+  attachAddButtonHandler(hass, entityId, tasks, ticks) {
     const input = this.querySelector('#new-task-input');
     const button = this.querySelector('#add-task-button');
     if (!input || !button) return;
+
     button.addEventListener('click', () => {
       const name = input.value.trim();
       if (!name) return;
@@ -141,7 +143,7 @@ class CustomTodoCard extends HTMLElement {
         alert("A task with this name already exists.");
         return;
       }
-      const updatedTasks = [...tasks, { name, type: 'Unsorted', checks: [false, false, false, false, false] }];
+      const updatedTasks = [...tasks, { name, type: 'Unsorted', checks: Array(ticks).fill(false) }];
       this.publishTasks(hass, entityId, updatedTasks);
       input.value = '';
     });
@@ -170,5 +172,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
   name: 'Custom Todo Card (MQTT)',
-  description: 'Grouped by type, stored in MQTT via script'
+  description: 'Grouped by type, stored in MQTT via backend script'
 });
