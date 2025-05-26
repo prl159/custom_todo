@@ -240,6 +240,6 @@ customElements.define('custom-todo-card', CustomTodoCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'custom-todo-card',
-  name: 'Custom Todo Card (MQTT)',
+  name: 'Custom Todo Card',
   description: 'Grouped by type, collapsible, filterable, stored in MQTT via backend script'
 });
