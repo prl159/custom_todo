@@ -7,6 +7,7 @@ class CustomTodoCard extends HTMLElement {
     this._showInProgress = stored.inprogress ?? true;
     this._filter = stored.filter ?? '';
     this._draftNewTask = localStorage.getItem("custom_todo_draft_task") || '';
+    this._initialized = false;
   }
 
   set hass(hass) {
@@ -33,6 +34,50 @@ class CustomTodoCard extends HTMLElement {
       tasks = tasks.filter(t => t.name.toLowerCase().includes(kw) || (t.type || '').toLowerCase().includes(kw));
     }
 
+    if (!this._initialized) {
+      this.innerHTML = `
+        <ha-card header="${config.title || 'Custom Todo'}">
+          <div class="card-content">
+            <div class="add-row">
+              <input id="new-task-input" type="text" placeholder="New task name">
+              <button id="add-task-button">Add</button>
+            </div>
+            <div class="search-row">
+              <input id="search-task-input" type="text" placeholder="Search...">
+            </div>
+            <div id="task-area"></div>
+          </div>
+        </ha-card>`;
+
+      const searchInput = this.querySelector('#search-task-input');
+      const newTaskInput = this.querySelector('#new-task-input');
+
+      searchInput.value = this._filter;
+      newTaskInput.value = this._draftNewTask;
+
+      searchInput.addEventListener('input', e => {
+        this._filter = e.target.value;
+        this._saveExpandState();
+        this.setHass(hass); // Update task area only
+      });
+
+      newTaskInput.addEventListener('input', () => {
+        this._draftNewTask = newTaskInput.value;
+        localStorage.setItem("custom_todo_draft_task", newTaskInput.value);
+      });
+
+      this.querySelector('#add-task-button').addEventListener('click', () =>
+        this.addTask(hass, entityId, tasks, tickCount)
+      );
+
+      this._initialized = true;
+    }
+
+    this.renderTaskArea(tasks, tickCount, groupCols, entityId);
+  }
+
+  renderTaskArea(tasks, tickCount, groupCols, entityId) {
+    const taskArea = this.querySelector('#task-area');
     const incomplete = tasks.filter(t => !t.checks.every(c => c));
     const completed = tasks.filter(t => t.checks.every(c => c));
 
@@ -42,15 +87,6 @@ class CustomTodoCard extends HTMLElement {
       if (!grouped[group]) grouped[group] = [];
       grouped[group].push(task);
     }
-
-    // Preserve input values and focus
-    const prevTaskInput = this.querySelector('#new-task-input');
-    const prevSearchInput = this.querySelector('#search-task-input');
-    const draftNewTask = prevTaskInput?.value || this._draftNewTask || '';
-    const draftSearch = prevSearchInput?.value || this._filter || '';
-    const focusedEl = document.activeElement;
-    const newTaskWasFocused = focusedEl === prevTaskInput;
-    const searchWasFocused = focusedEl === prevSearchInput;
 
     const groupHtml = Object.entries(grouped).map(([type, items]) => {
       const open = this._expandedGroups[type] ?? true;
@@ -85,52 +121,10 @@ class CustomTodoCard extends HTMLElement {
         </div>
       </div>` : '';
 
-    this.innerHTML = `
-      <ha-card header="${config.title || 'Custom Todo'}">
-        <div class="card-content">
-          <div class="add-row">
-            <input id="new-task-input" type="text" placeholder="New task name">
-            <button id="add-task-button">Add</button>
-          </div>
-          <div class="search-row">
-            <input id="search-task-input" type="text" placeholder="Search..." value="${draftSearch}">
-          </div>
-          ${tasks.length === 0 ? '<div class="no-tasks">📭 No tasks</div>' : ''}
-          ${inProgressHtml}
-          ${completedHtml}
-        </div>
-      </ha-card>`;
+    taskArea.innerHTML = `${tasks.length === 0 ? '<div class="no-tasks">📭 No tasks</div>' : ''}${inProgressHtml}${completedHtml}`;
 
-    // Restore values and focus
-    const newTaskInput = this.querySelector('#new-task-input');
-    if (newTaskInput) {
-      newTaskInput.value = draftNewTask;
-      if (newTaskWasFocused) newTaskInput.focus();
-      newTaskInput.addEventListener('blur', () => {
-        localStorage.setItem("custom_todo_draft_task", newTaskInput.value);
-      });
-    }
-
-    const searchInput = this.querySelector('#search-task-input');
-    if (searchInput) {
-      if (searchWasFocused) searchInput.focus();
-      let filterTimeout;
-      searchInput.addEventListener('input', e => {
-        this._filter = e.target.value;
-        clearTimeout(filterTimeout);
-        filterTimeout = setTimeout(() => {
-          this._saveExpandState();
-          this.setHass(hass); // Only rerender visible area — safe now that draft is preserved
-        }, 300);
-      });
-    }
-
-    this.querySelector('#add-task-button')?.addEventListener('click', () =>
-      this.addTask(hass, entityId, tasks, tickCount)
-    );
-
-    this.attachCheckboxHandlers(hass, entityId, tasks);
-    this.attachDeleteButtonHandlers(hass, entityId, tasks);
+    this.attachCheckboxHandlers(this._hass, entityId, tasks);
+    this.attachDeleteButtonHandlers(this._hass, entityId, tasks);
     this.attachToggleHandlers();
   }
 
@@ -159,6 +153,7 @@ class CustomTodoCard extends HTMLElement {
     this.publishTasks(hass, entityId, [...tasks, task]);
     input.value = '';
     localStorage.removeItem("custom_todo_draft_task");
+    this._draftNewTask = '';
   }
 
   attachCheckboxHandlers(hass, entityId, tasks) {
