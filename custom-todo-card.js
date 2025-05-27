@@ -151,25 +151,38 @@ class CustomTodoCard extends HTMLElement {
   }
 
   attachToggleHandlers() {
-    this.querySelectorAll('[data-group],[data-inprogress],[data-completed]').forEach(el => {
+    this.querySelectorAll('[data-group]').forEach(el => {
       el.addEventListener('click', () => {
-        const key = el.dataset.group || (el.dataset.inprogress ? 'inprogress' : 'completed');
-        const container = this.querySelector(`[data-container="${key}"]`);
-        const stateKey = key === 'completed' ? '_showCompleted' : key === 'inprogress' ? '_showInProgress' : '_expandedGroups';
-        const isGroup = key !== 'completed' && key !== 'inprogress';
-
-        if (isGroup) {
-          this._expandedGroups[key] = !this._expandedGroups[key];
-          if (container) container.style.display = this._expandedGroups[key] ? 'grid' : 'none';
-        } else {
-          this[stateKey] = !this[stateKey];
-          if (container) container.style.display = this[stateKey] ? 'block' : 'none';
-        }
-        el.querySelector('.caret').textContent = this[stateKey]?.[key] ?? this[stateKey] ? '▼' : '▶';
+        const group = el.dataset.group;
+        this._expandedGroups[group] = !this._expandedGroups[group];
         this._saveExpandState();
+        const container = this.querySelector(`[data-container="${group}"]`);
+        if (container) container.style.display = this._expandedGroups[group] ? 'grid' : 'none';
+        el.querySelector('.caret').textContent = this._expandedGroups[group] ? '▼' : '▶';
+      });
+    });
+  
+    this.querySelectorAll('[data-completed]').forEach(el => {
+      el.addEventListener('click', () => {
+        this._showCompleted = !this._showCompleted;
+        this._saveExpandState();
+        const container = this.querySelector('[data-container="completed"]');
+        if (container) container.style.display = this._showCompleted ? 'block' : 'none';
+        el.querySelector('.caret').textContent = this._showCompleted ? '▼' : '▶';
+      });
+    });
+  
+    this.querySelectorAll('[data-inprogress]').forEach(el => {
+      el.addEventListener('click', () => {
+        this._showInProgress = !this._showInProgress;
+        this._saveExpandState();
+        const container = this.querySelector('[data-container="inprogress"]');
+        if (container) container.style.display = this._showInProgress ? 'block' : 'none';
+        el.querySelector('.caret').textContent = this._showInProgress ? '▼' : '▶';
       });
     });
   }
+
 
   _saveExpandState() {
     localStorage.setItem("custom_todo_expand_state", JSON.stringify({
