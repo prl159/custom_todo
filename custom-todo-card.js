@@ -182,11 +182,7 @@ class CustomTodoCard extends HTMLElement {
     if (searchBox) {
       searchBox.addEventListener('input', (e) => {
         this._filter = e.target.value;
-        localStorage.setItem("custom_todo_expand_state", JSON.stringify({
-          groups: this._expandedGroups,
-          completed: this._showCompleted,
-          filter: this._filter
-        }));
+        this._saveExpandState();
         this.setHass(this._hass);
       });
     }
@@ -197,3 +193,121 @@ class CustomTodoCard extends HTMLElement {
     this.attachDeleteButtonHandlers(hass, entityId, tasks);
     this.attachToggleHandlers();
   }
+
+  renderTask(task) {
+    return `
+      <div class="task-row">
+        <div class="task-name">${task.name}</div>
+        <div class="checkbox-group">
+          ${[0, 1, 2, 3, 4].map(j => `
+            <input type="checkbox" ${task.checks[j] ? 'checked' : ''} data-id="${task.id}" data-name="${task.name}" data-check="${j}">
+          `).join('')}
+          <button class="delete-btn" data-id="${task.id}" title="Remove task">✖</button>
+        </div>
+      </div>
+    `;
+  }
+
+  attachCheckboxHandlers(hass, entityId, tasks) {
+    this.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const taskId = e.target.dataset.id;
+        const taskName = e.target.dataset.name;
+        const checkIdx = parseInt(e.target.dataset.check);
+        const task = tasks.find(t => t.id === taskId && t.name === taskName);
+        if (!task) return;
+        task.checks[checkIdx] = e.target.checked;
+        this.publishTasks(hass, entityId, tasks);
+      });
+    });
+  }
+
+  attachAddButtonHandler(hass, entityId, tasks) {
+    const input = this.querySelector('#new-task-input');
+    const button = this.querySelector('#add-task-button');
+    if (!input || !button) return;
+    button.addEventListener('click', () => {
+      const name = input.value.trim();
+      if (!name) return;
+      const alreadyExists = tasks.some(t => t.name.toLowerCase() === name.toLowerCase());
+      if (alreadyExists) {
+        alert("A task with this name already exists.");
+        return;
+      }
+      const newTask = {
+        name,
+        checks: [false, false, false, false, false],
+        id: `${name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`
+      };
+      const updatedTasks = [...tasks, newTask];
+      this.publishTasks(hass, entityId, updatedTasks);
+      input.value = '';
+    });
+  }
+
+  attachDeleteButtonHandlers(hass, entityId, tasks) {
+    this.querySelectorAll('.delete-btn').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const taskId = e.target.dataset.id;
+        const updatedTasks = tasks.filter(t => t.id !== taskId);
+        this.publishTasks(hass, entityId, updatedTasks);
+      });
+    });
+  }
+
+  attachToggleHandlers() {
+    this.querySelectorAll('[data-group]').forEach(el => {
+      el.addEventListener('click', () => {
+        const group = el.dataset.group;
+        this._expandedGroups[group] = !this._expandedGroups[group];
+        this._saveExpandState();
+        const container = this.querySelector(`[data-container="${group}"]`);
+        if (container) container.style.display = this._expandedGroups[group] ? 'grid' : 'none';
+        el.querySelector('.caret').textContent = this._expandedGroups[group] ? '▼' : '▶';
+      });
+    });
+    this.querySelectorAll('[data-completed]').forEach(el => {
+      el.addEventListener('click', () => {
+        this._showCompleted = !this._showCompleted;
+        this._saveExpandState();
+        const container = this.querySelector('[data-container="completed"]');
+        if (container) container.style.display = this._showCompleted ? 'block' : 'none';
+        el.querySelector('.caret').textContent = this._showCompleted ? '▼' : '▶';
+      });
+    });
+  }
+
+  _saveExpandState() {
+    localStorage.setItem("custom_todo_expand_state", JSON.stringify({
+      groups: this._expandedGroups,
+      completed: this._showCompleted,
+      filter: this._filter
+    }));
+  }
+
+  publishTasks(hass, entityId, tasks) {
+    const topicBase = entityId.replace("sensor.custom_todo_", "");
+    const topic = `home/custom_todo/${topicBase}/attributes`;
+    hass.callService("script", "set_custom_todo_mqtt", {
+      topic,
+      tasks
+    });
+  }
+
+  setConfig(config) {
+    this._config = config;
+  }
+
+  getCardSize() {
+    return 3;
+  }
+}
+
+customElements.define('custom-todo-card', CustomTodoCard);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'custom-todo-card',
+  name: 'Custom Todo Card',
+  description: 'Todo card with groups, search, persistent state, and MQTT support'
+});
