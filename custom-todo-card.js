@@ -45,13 +45,31 @@ class CustomTodoCard extends HTMLElement {
     if (this._filter) {
       const kw = this._filter.toLowerCase();
       tasks = tasks.filter(t =>
-        (t.name?.toLowerCase().includes(kw) || '') ||
-        (t.type?.toLowerCase().includes(kw) || '')
+        (t.name?.toLowerCase().includes(kw) || false)
       );
     }
 
     if (!this._initialized) {
-      this.innerHTML = `
+      const style = document.createElement('style');
+      style.textContent = `
+        .task-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
+        .task-name {
+          flex-grow: 1;
+        }
+        .checkbox-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+      `;
+      this.appendChild(style);
+
+      this.innerHTML += `
         <ha-card header="${config.title || 'Custom Todo'}">
           <div class="card-content">
             <div class="add-row">
