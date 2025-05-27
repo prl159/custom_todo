@@ -67,10 +67,15 @@ class CustomTodoCard extends HTMLElement {
           align-items: center;
           gap: 4px;
         }
+        .add-row,
+        .type-row {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
         .add-row input,
-        .search-row input,
         .type-row input {
-          width: 100%;
+          flex: 1;
           height: 40px;
           font-size: 1rem;
           padding: 8px;
@@ -83,18 +88,35 @@ class CustomTodoCard extends HTMLElement {
           height: 40px;
           font-size: 1rem;
           padding: 0 16px;
-          margin-left: 8px;
+        }
+        .search-row input {
+          width: 100%;
+          height: 40px;
+          font-size: 1rem;
+          padding: 8px;
+          margin-bottom: 8px;
+          border: var(--input-border, 1px solid var(--divider-color));
+          border-radius: var(--input-border-radius, 4px);
+          background-color: var(--card-background-color);
+          color: var(--primary-text-color);
+        }
+        .todo-card-icon {
+          --mdc-icon-size: 24px;
+          color: var(--primary-color);
         }
       `;
       this.appendChild(style);
 
-      const typeInputHTML = containsType ? `<div class="type-row"><input id="new-type-input" type="text" placeholder="Type (optional)"></div>` : '';
+      const typeInputHTML = containsType ? `
+        <div class="type-row">
+          <input id="new-type-input" type="text" placeholder="Type (optional)">
+        </div>` : '';
 
       this.innerHTML += `
         <ha-card>
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; padding: 16px; font-size: 1.1em;">
             <span style="font-weight:500;">${config.title || 'Custom Todo'}</span>
-            <ha-icon icon="${config.icon || entity?.attributes?.icon || 'mdi:checkbox-marked-outline'}" style="color: var(--primary-text-color);"></ha-icon>
+            <ha-icon icon="${config.icon || entity?.attributes?.icon || 'mdi:checkbox-marked-outline'}" class="todo-card-icon"></ha-icon>
           </div>
           <div class="card-content">
             <div class="add-row">
