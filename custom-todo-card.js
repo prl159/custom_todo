@@ -69,24 +69,29 @@ class CustomTodoCard extends HTMLElement {
       </div>
     `;
 
+    let content = '';
+    if (!entity) {
+      content = `<div class="warning">🚫 Entity <code>${entityId}</code> not found.</div>`;
+    } else {
+      content = `
+        <div class="add-row">
+          <input id="new-task-input" type="text" placeholder="New task name">
+          <button id="add-task-button">Add</button>
+        </div>
+        <div class="search-row">
+          <input id="search-task-input" type="text" placeholder="Search..." value="${this._filter || ''}">
+        </div>
+        ${(tasks.length === 0) ? '<div class="no-tasks">📭 No tasks</div>' : ''}
+        <h2 class="section-title">In Progress</h2>
+        ${groupHtml}
+        ${(completed.length > 0) ? completedHtml : ''}
+      `;
+    }
+
     this.innerHTML = `
       <ha-card header="${config.title || 'Custom Todo'}">
         <div class="card-content">
-          ${!entity ? `
-            <div class="warning">🚫 Entity <code>${entityId}</code> not found.</div>
-          ` : `
-            <div class="add-row">
-              <input id="new-task-input" type="text" placeholder="New task name">
-              <button id="add-task-button">Add</button>
-            </div>
-            <div class="search-row">
-              <input id="search-task-input" type="text" placeholder="Search..." value="${this._filter || ''}">
-            </div>
-            ${tasks.length === 0 ? `<div class="no-tasks">📭 No tasks</div>` : ''}
-            <h2 class="section-title">In Progress</h2>
-            ${groupHtml}
-            ${completed.length > 0 ? completedHtml : ''}
-          `}
+          ${content}
         </div>
       </ha-card>
       <style>
@@ -192,5 +197,3 @@ class CustomTodoCard extends HTMLElement {
     this.attachDeleteButtonHandlers(hass, entityId, tasks);
     this.attachToggleHandlers();
   }
-
-  // ... (rest of the code remains unchanged)
