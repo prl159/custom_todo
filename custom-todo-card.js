@@ -1,12 +1,12 @@
 class CustomTodoCard extends HTMLElement {
   constructor() {
     super();
-    const stored = JSON.parse(localStorage.getItem("custom_todo_expand_state") || "{}");
-    this._expandedGroups = stored.groups || {};
-    this._showCompleted = stored.completed ?? false;
-    this._showInProgress = stored.inprogress ?? true;
-    this._filter = stored.filter ?? '';
-    this._draftNewTask = localStorage.getItem("custom_todo_draft_task") || '';
+    this._configNameKey = null; // unique storage key base per card instance
+    this._expandedGroups = {};
+    this._showCompleted = false;
+    this._showInProgress = true;
+    this._filter = '';
+    this._draftNewTask = '';
     this._initialized = false;
   }
 
@@ -15,10 +15,23 @@ class CustomTodoCard extends HTMLElement {
     const config = this._config;
     const tickCount = Number(config.no_of_ticks || 1);
     const groupCols = config.no_grouped_columns || 1;
-    const entityId = `sensor.custom_todo_${config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_')}`;
+    const nameKey = config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+    const entityId = `sensor.custom_todo_${nameKey}`;
     const entity = hass.states[entityId];
 
     if (!config.name) throw new Error("Card 'name' is required");
+
+    // Unique keys per card instance
+    this._configNameKey = nameKey;
+    const expandKey = `custom_todo_expand_state_${nameKey}`;
+    const draftKey = `custom_todo_draft_task_${nameKey}`;
+
+    const stored = JSON.parse(localStorage.getItem(expandKey) || "{}");
+    this._expandedGroups = stored.groups || {};
+    this._showCompleted = stored.completed ?? false;
+    this._showInProgress = stored.inprogress ?? true;
+    this._filter = stored.filter ?? '';
+    this._draftNewTask = localStorage.getItem(draftKey) || '';
 
     let tasks = entity?.attributes?.tasks || [];
     tasks = tasks.map(task => ({
@@ -31,7 +44,10 @@ class CustomTodoCard extends HTMLElement {
 
     if (this._filter) {
       const kw = this._filter.toLowerCase();
-      tasks = tasks.filter(t => t.name.toLowerCase().includes(kw) || (t.type || '').toLowerCase().includes(kw));
+      tasks = tasks.filter(t =>
+        (t.name?.toLowerCase().includes(kw) || '') ||
+        (t.type?.toLowerCase().includes(kw) || '')
+      );
     }
 
     if (!this._initialized) {
@@ -58,12 +74,12 @@ class CustomTodoCard extends HTMLElement {
       searchInput.addEventListener('input', e => {
         this._filter = e.target.value;
         this._saveExpandState();
-        this.setHass(hass); // Update task area only
+        this.setHass(hass); // Rebuild task area only
       });
 
       newTaskInput.addEventListener('input', () => {
         this._draftNewTask = newTaskInput.value;
-        localStorage.setItem("custom_todo_draft_task", newTaskInput.value);
+        localStorage.setItem(draftKey, newTaskInput.value);
       });
 
       this.querySelector('#add-task-button').addEventListener('click', () =>
@@ -152,7 +168,7 @@ class CustomTodoCard extends HTMLElement {
     };
     this.publishTasks(hass, entityId, [...tasks, task]);
     input.value = '';
-    localStorage.removeItem("custom_todo_draft_task");
+    localStorage.removeItem(`custom_todo_draft_task_${this._configNameKey}`);
     this._draftNewTask = '';
   }
 
@@ -211,7 +227,7 @@ class CustomTodoCard extends HTMLElement {
   }
 
   _saveExpandState() {
-    localStorage.setItem("custom_todo_expand_state", JSON.stringify({
+    localStorage.setItem(`custom_todo_expand_state_${this._configNameKey}`, JSON.stringify({
       groups: this._expandedGroups,
       completed: this._showCompleted,
       inprogress: this._showInProgress,
