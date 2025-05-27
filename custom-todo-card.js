@@ -68,13 +68,15 @@ class CustomTodoCard extends HTMLElement {
           gap: 4px;
         }
         .add-row,
-        .type-row {
+        .type-row,
+        .search-row {
           display: flex;
           gap: 8px;
           margin-bottom: 8px;
         }
         .add-row input,
-        .type-row input {
+        .type-row input,
+        .search-row input {
           flex: 1;
           height: 40px;
           font-size: 1rem;
@@ -89,102 +91,122 @@ class CustomTodoCard extends HTMLElement {
           font-size: 1rem;
           padding: 0 16px;
         }
-        .search-row input {
-          width: 100%;
-          height: 40px;
-          font-size: 1rem;
-          padding: 8px;
-          margin-bottom: 8px;
-          border: var(--input-border, 1px solid var(--divider-color));
-          border-radius: var(--input-border-radius, 4px);
-          background-color: var(--card-background-color);
-          color: var(--primary-text-color);
-        }
         .todo-card-icon {
           --mdc-icon-size: 24px;
-          color: var(--primary-color);
+          color: var(--secondary-text-color, var(--primary-color));
         }
       `;
       this.appendChild(style);
 
-      const typeInputHTML = containsType ? `
-        <div class="type-row">
-          <input id="new-type-input" type="text" placeholder="Type (optional)">
-        </div>` : '';
-
-      this.innerHTML += `
+      this.innerHTML = `
         <ha-card>
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; padding: 16px; font-size: 1.1em;">
             <span style="font-weight:500;">${config.title || 'Custom Todo'}</span>
             <ha-icon icon="${config.icon || entity?.attributes?.icon || 'mdi:checkbox-marked-outline'}" class="todo-card-icon"></ha-icon>
           </div>
           <div class="card-content">
+            ${containsType ? `<div class='type-row'><input id='new-type-input' type='text' placeholder='Type (optional)'></div>` : ''}
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
             </div>
-            ${typeInputHTML}
             <div class="search-row">
               <input id="search-task-input" type="text" placeholder="Search...">
             </div>
             <div id="task-area"></div>
           </div>
         </ha-card>`;
-
-      const searchInput = this.querySelector('#search-task-input');
-      const newTaskInput = this.querySelector('#new-task-input');
-      const newTypeInput = this.querySelector('#new-type-input');
-
-      searchInput.value = this._filter;
-      newTaskInput.value = this._draftNewTask;
-      if (newTypeInput) newTypeInput.value = this._draftNewType;
-
-      searchInput.addEventListener('input', e => {
-        this._filter = e.target.value;
-        this._saveExpandState();
-        clearTimeout(this._filterDebounce);
-        this._filterDebounce = setTimeout(() => this.setHass(hass), 100);
-      });
-
-      newTaskInput.addEventListener('input', () => {
-        this._draftNewTask = newTaskInput.value;
-        localStorage.setItem(draftKey, newTaskInput.value);
-      });
-
-      if (newTypeInput) {
-        newTypeInput.addEventListener('input', () => {
-          this._draftNewType = newTypeInput.value;
-          localStorage.setItem(draftTypeKey, newTypeInput.value);
-        });
-      }
-
-      this.querySelector('#add-task-button').addEventListener('click', () =>
-        this.addTask(hass, entityId, tasks, tickCount, containsType)
-      );
-
-      this.querySelector('.card-header')?.addEventListener('click', () => {
-        const taskArea = this.querySelector('#task-area');
-        if (!taskArea) return;
-        const isVisible = taskArea.style.display !== 'none';
-        taskArea.style.display = isVisible ? 'none' : 'block';
-        this._saveExpandState();
-      });
-
       this._initialized = true;
     }
+
+    const searchInput = this.querySelector('#search-task-input');
+    const newTaskInput = this.querySelector('#new-task-input');
+    const newTypeInput = this.querySelector('#new-type-input');
+
+    searchInput.value = this._filter;
+    newTaskInput.value = this._draftNewTask;
+    if (newTypeInput) newTypeInput.value = this._draftNewType;
+    this.querySelector('#add-task-button')?.addEventListener('click', () => {
+      this.addTask(hass, entityId, tasks, tickCount, containsType);
+      setTimeout(() => newTaskInput?.focus(), 50);
+    });
+
+    [newTaskInput, newTypeInput].forEach(input => {
+      if (input) {
+        input.addEventListener('keypress', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.addTask(hass, entityId, tasks, tickCount, containsType);
+            setTimeout(() => newTaskInput?.focus(), 50);
+          }
+        });
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            input.value = '';
+          }
+        });
+      }
+    });
+
+    searchInput.addEventListener('input', e => {
+      this._filter = e.target.value;
+      this._saveExpandState();
+      clearTimeout(this._filterDebounce);
+      this._filterDebounce = setTimeout(() => this.setHass(hass), 100);
+    });
+
+    searchInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._filter = e.target.value;
+        this._saveExpandState();
+        this.setHass(hass);
+      } else if (e.key === 'Escape') {
+        e.target.value = '';
+        this._filter = '';
+        this._saveExpandState();
+        this.setHass(hass);
+      }
+    });
+
+    newTaskInput.addEventListener('input', () => {
+      this._draftNewTask = newTaskInput.value;
+      localStorage.setItem(draftKey, newTaskInput.value);
+    });
+
+    if (newTypeInput) {
+      newTypeInput.addEventListener('input', () => {
+        this._draftNewType = newTypeInput.value;
+        localStorage.setItem(draftTypeKey, newTypeInput.value);
+      });
+    }
+
+    this.querySelector('.card-header')?.addEventListener('click', () => {
+      const taskArea = this.querySelector('#task-area');
+      if (!taskArea) return;
+      const isVisible = taskArea.style.display !== 'none';
+      taskArea.style.display = isVisible ? 'none' : 'block';
+      this._saveExpandState();
+    });
 
     this.renderTaskArea(tasks, tickCount, groupCols, entityId);
   }
 
   renderTaskArea(tasks, tickCount, groupCols, entityId) {
-    const incomplete = tasks.filter(t => !t.checks.every(c => c));
-    const completed = tasks.filter(t => t.checks.every(c => c));
-
     const grouped = {};
-    for (const task of incomplete) {
-      const group = task.type || "Ungrouped";
-      if (!grouped[group]) grouped[group] = [];
-      grouped[group].push(task);
+    const completed = [];
+    const incomplete = [];
+
+    for (const task of tasks) {
+      if (task.checks.every(c => c)) {
+        completed.push(task);
+      } else {
+        const group = task.type || 'Ungrouped';
+        grouped[group] = grouped[group] || [];
+        grouped[group].push(task);
+        incomplete.push(task);
+      }
     }
 
     const groupHtml = Object.entries(grouped).map(([type, items]) => {
@@ -194,7 +216,7 @@ class CustomTodoCard extends HTMLElement {
           <h3 class="group-title" data-group="${type}">
             <span class="caret">${open ? "▼" : "▶"}</span> ${type}
           </h3>
-          <div class="group-tasks" data-container="${type}" style="display:${open ? "grid" : "none"}; grid-template-columns: repeat(auto-fill, minmax(calc(100% / ${groupCols}), 1fr)); gap: 8px;">
+          <div class="group-tasks" data-container="${type}" style="display:${open ? "grid" : "none"}; grid-template-columns: repeat(${groupCols}, 1fr); gap: 8px;">
             ${items.map(task => this.renderTask(task, tickCount)).join('')}
           </div>
         </div>`;
@@ -220,13 +242,14 @@ class CustomTodoCard extends HTMLElement {
         </div>
       </div>` : '';
 
-    const area = this.querySelector('#task-area');
-    if (area) {
-      area.innerHTML = `${inProgressHtml}${completedHtml || ''}`;
-      this.attachToggleHandlers();
-      this.attachCheckboxHandlers(this._hass, entityId, [...incomplete, ...completed]);
-      this.attachDeleteButtonHandlers(this._hass, entityId, [...incomplete, ...completed]);
-    }
+    this.querySelector('#task-area').innerHTML = `
+      ${inProgressHtml}
+      ${completedHtml}
+    `;
+
+    this.attachCheckboxHandlers(entityId, tasks);
+    this.attachDeleteButtonHandlers(entityId, tasks);
+    this.attachToggleHandlers();
   }
 
   renderTask(task, tickCount) {
@@ -241,45 +264,44 @@ class CustomTodoCard extends HTMLElement {
   }
 
   addTask(hass, entityId, tasks, tickCount, containsType) {
-    const input = this.querySelector('#new-task-input');
-    const typeInput = containsType ? this.querySelector('#new-type-input') : null;
-    const name = input?.value.trim();
-    const type = typeInput?.value.trim();
-
+    const newTaskInput = this.querySelector('#new-task-input');
+    const newTypeInput = this.querySelector('#new-type-input');
+    const name = newTaskInput?.value.trim();
+    const type = newTypeInput?.value.trim();
     if (!name) return;
     if (tasks.some(t => t.name.toLowerCase() === name.toLowerCase())) {
       alert("Task already exists."); return;
     }
-
     const task = {
       name,
+      type: containsType ? type : undefined,
       id: `${name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`,
-      checks: Array(tickCount).fill(false),
-      ...(containsType ? { type } : {})
+      checks: Array(tickCount).fill(false)
     };
-
     this.publishTasks(hass, entityId, [...tasks, task]);
-    input.value = '';
-    if (typeInput) typeInput.value = '';
+    newTaskInput.value = '';
+    if (newTypeInput) newTypeInput.value = '';
+    localStorage.setItem(`custom_todo_draft_task_${this._configNameKey}`, '');
+    localStorage.setItem(`custom_todo_draft_type_${this._configNameKey}`, '');
   }
 
-  attachCheckboxHandlers(hass, entityId, tasks) {
+  attachCheckboxHandlers(entityId, tasks) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', e => {
         const id = e.target.dataset.id, check = +e.target.dataset.check;
         const task = tasks.find(t => t.id === id);
         if (!task) return;
         task.checks[check] = e.target.checked;
-        this.publishTasks(hass, entityId, tasks);
+        this.publishTasks(this._hass, entityId, tasks);
       });
     });
   }
 
-  attachDeleteButtonHandlers(hass, entityId, tasks) {
+  attachDeleteButtonHandlers(entityId, tasks) {
     this.querySelectorAll('.delete-btn').forEach(button =>
       button.addEventListener('click', e => {
         const id = e.target.dataset.id;
-        this.publishTasks(hass, entityId, tasks.filter(t => t.id !== id));
+        this.publishTasks(this._hass, entityId, tasks.filter(t => t.id !== id));
       })
     );
   }
@@ -331,13 +353,8 @@ class CustomTodoCard extends HTMLElement {
     hass.callService("script", "set_custom_todo_mqtt", { topic, tasks });
   }
 
-  setConfig(config) {
-    this._config = config;
-  }
-
-  getCardSize() {
-    return 3;
-  }
+  setConfig(config) { this._config = config; }
+  getCardSize() { return 3; }
 }
 
 customElements.define('custom-todo-card', CustomTodoCard);
