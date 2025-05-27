@@ -6,6 +6,7 @@ class CustomTodoCard extends HTMLElement {
     this._showCompleted = stored.completed ?? false;
     this._showInProgress = stored.inprogress ?? true;
     this._filter = stored.filter ?? '';
+    this._draftNewTask = localStorage.getItem("custom_todo_draft_task") || '';
   }
 
   set hass(hass) {
@@ -41,6 +42,15 @@ class CustomTodoCard extends HTMLElement {
       if (!grouped[group]) grouped[group] = [];
       grouped[group].push(task);
     }
+
+    // Preserve input values and focus
+    const prevTaskInput = this.querySelector('#new-task-input');
+    const prevSearchInput = this.querySelector('#search-task-input');
+    const draftNewTask = prevTaskInput?.value || this._draftNewTask || '';
+    const draftSearch = prevSearchInput?.value || this._filter || '';
+    const focusedEl = document.activeElement;
+    const newTaskWasFocused = focusedEl === prevTaskInput;
+    const searchWasFocused = focusedEl === prevSearchInput;
 
     const groupHtml = Object.entries(grouped).map(([type, items]) => {
       const open = this._expandedGroups[type] ?? true;
@@ -83,7 +93,7 @@ class CustomTodoCard extends HTMLElement {
             <button id="add-task-button">Add</button>
           </div>
           <div class="search-row">
-            <input id="search-task-input" type="text" placeholder="Search..." value="${this._filter}">
+            <input id="search-task-input" type="text" placeholder="Search..." value="${draftSearch}">
           </div>
           ${tasks.length === 0 ? '<div class="no-tasks">📭 No tasks</div>' : ''}
           ${inProgressHtml}
@@ -91,12 +101,33 @@ class CustomTodoCard extends HTMLElement {
         </div>
       </ha-card>`;
 
-    this.querySelector('#add-task-button')?.addEventListener('click', () => this.addTask(hass, entityId, tasks, tickCount));
-    this.querySelector('#search-task-input')?.addEventListener('input', e => {
-      this._filter = e.target.value;
-      this._saveExpandState();
-      this.setHass(hass);
-    });
+    // Restore values and focus
+    const newTaskInput = this.querySelector('#new-task-input');
+    if (newTaskInput) {
+      newTaskInput.value = draftNewTask;
+      if (newTaskWasFocused) newTaskInput.focus();
+      newTaskInput.addEventListener('blur', () => {
+        localStorage.setItem("custom_todo_draft_task", newTaskInput.value);
+      });
+    }
+
+    const searchInput = this.querySelector('#search-task-input');
+    if (searchInput) {
+      if (searchWasFocused) searchInput.focus();
+      let filterTimeout;
+      searchInput.addEventListener('input', e => {
+        this._filter = e.target.value;
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(() => {
+          this._saveExpandState();
+          this.setHass(hass); // Only rerender visible area — safe now that draft is preserved
+        }, 300);
+      });
+    }
+
+    this.querySelector('#add-task-button')?.addEventListener('click', () =>
+      this.addTask(hass, entityId, tasks, tickCount)
+    );
 
     this.attachCheckboxHandlers(hass, entityId, tasks);
     this.attachDeleteButtonHandlers(hass, entityId, tasks);
@@ -127,6 +158,7 @@ class CustomTodoCard extends HTMLElement {
     };
     this.publishTasks(hass, entityId, [...tasks, task]);
     input.value = '';
+    localStorage.removeItem("custom_todo_draft_task");
   }
 
   attachCheckboxHandlers(hass, entityId, tasks) {
@@ -161,7 +193,7 @@ class CustomTodoCard extends HTMLElement {
         el.querySelector('.caret').textContent = this._expandedGroups[group] ? '▼' : '▶';
       });
     });
-  
+
     this.querySelectorAll('[data-completed]').forEach(el => {
       el.addEventListener('click', () => {
         this._showCompleted = !this._showCompleted;
@@ -171,7 +203,7 @@ class CustomTodoCard extends HTMLElement {
         el.querySelector('.caret').textContent = this._showCompleted ? '▼' : '▶';
       });
     });
-  
+
     this.querySelectorAll('[data-inprogress]').forEach(el => {
       el.addEventListener('click', () => {
         this._showInProgress = !this._showInProgress;
@@ -182,7 +214,6 @@ class CustomTodoCard extends HTMLElement {
       });
     });
   }
-
 
   _saveExpandState() {
     localStorage.setItem("custom_todo_expand_state", JSON.stringify({
