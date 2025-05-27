@@ -1,12 +1,13 @@
 class CustomTodoCard extends HTMLElement {
   constructor() {
     super();
-    this._configNameKey = null; // unique storage key base per card instance
+    this._configNameKey = null;
     this._expandedGroups = {};
     this._showCompleted = false;
     this._showInProgress = true;
     this._filter = '';
     this._draftNewTask = '';
+    this._draftNewType = '';
     this._initialized = false;
   }
 
@@ -15,16 +16,17 @@ class CustomTodoCard extends HTMLElement {
     const config = this._config;
     const tickCount = Number(config.no_of_ticks || 1);
     const groupCols = config.no_grouped_columns || 1;
+    const containsType = !!config.contains_type;
     const nameKey = config.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_');
     const entityId = `sensor.custom_todo_${nameKey}`;
     const entity = hass.states[entityId];
 
     if (!config.name) throw new Error("Card 'name' is required");
 
-    // Unique keys per card instance
     this._configNameKey = nameKey;
     const expandKey = `custom_todo_expand_state_${nameKey}`;
     const draftKey = `custom_todo_draft_task_${nameKey}`;
+    const draftTypeKey = `custom_todo_draft_type_${nameKey}`;
 
     const stored = JSON.parse(localStorage.getItem(expandKey) || "{}");
     this._expandedGroups = stored.groups || {};
@@ -32,6 +34,7 @@ class CustomTodoCard extends HTMLElement {
     this._showInProgress = stored.inprogress ?? true;
     this._filter = stored.filter ?? '';
     this._draftNewTask = localStorage.getItem(draftKey) || '';
+    this._draftNewType = localStorage.getItem(draftTypeKey) || '';
 
     let tasks = entity?.attributes?.tasks || [];
     tasks = tasks.map(task => ({
@@ -44,9 +47,7 @@ class CustomTodoCard extends HTMLElement {
 
     if (this._filter) {
       const kw = this._filter.toLowerCase();
-      tasks = tasks.filter(t =>
-        (t.name?.toLowerCase().includes(kw) || false)
-      );
+      tasks = tasks.filter(t => (t.name?.toLowerCase().includes(kw) || false));
     }
 
     if (!this._initialized) {
@@ -66,16 +67,36 @@ class CustomTodoCard extends HTMLElement {
           align-items: center;
           gap: 4px;
         }
+        .add-row input,
+        .search-row input,
+        .type-row input {
+          width: 95%;
+          height: 36px;
+          font-size: 16px;
+          padding: 4px 8px;
+          margin-bottom: 8px;
+        }
+        .add-row button {
+          height: 36px;
+          margin-left: 8px;
+        }
       `;
       this.appendChild(style);
 
-      this.innerHTML += `
-        <ha-card header="${config.title || 'Custom Todo'}">
+      const typeInputHTML = containsType ? `<div class="type-row"><input id="new-type-input" type="text" placeholder="Type (optional)"></div>` : '';
+
+      this.innerHTML = `
+        <ha-card>
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; padding: 16px; font-weight:500; font-size: 1.1em; cursor: pointer;">
+            ${config.icon ? `<ha-icon icon="${config.icon}" style="margin-right: 8px;"></ha-icon>` : ''}
+            <span>${config.title || 'Custom Todo'}</span>
+          </div>
           <div class="card-content">
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
             </div>
+            ${typeInputHTML}
             <div class="search-row">
               <input id="search-task-input" type="text" placeholder="Search...">
             </div>
@@ -85,14 +106,17 @@ class CustomTodoCard extends HTMLElement {
 
       const searchInput = this.querySelector('#search-task-input');
       const newTaskInput = this.querySelector('#new-task-input');
+      const newTypeInput = this.querySelector('#new-type-input');
 
       searchInput.value = this._filter;
       newTaskInput.value = this._draftNewTask;
+      if (newTypeInput) newTypeInput.value = this._draftNewType;
 
       searchInput.addEventListener('input', e => {
         this._filter = e.target.value;
         this._saveExpandState();
-        this.setHass(hass); // Rebuild task area only
+        clearTimeout(this._filterDebounce);
+        this._filterDebounce = setTimeout(() => this.setHass(hass), 100);
       });
 
       newTaskInput.addEventListener('input', () => {
@@ -100,9 +124,24 @@ class CustomTodoCard extends HTMLElement {
         localStorage.setItem(draftKey, newTaskInput.value);
       });
 
+      if (newTypeInput) {
+        newTypeInput.addEventListener('input', () => {
+          this._draftNewType = newTypeInput.value;
+          localStorage.setItem(draftTypeKey, newTypeInput.value);
+        });
+      }
+
       this.querySelector('#add-task-button').addEventListener('click', () =>
-        this.addTask(hass, entityId, tasks, tickCount)
+        this.addTask(hass, entityId, tasks, tickCount, containsType)
       );
+
+      this.querySelector('.card-header')?.addEventListener('click', () => {
+        const taskArea = this.querySelector('#task-area');
+        if (!taskArea) return;
+        const isVisible = taskArea.style.display !== 'none';
+        taskArea.style.display = isVisible ? 'none' : 'block';
+        this._saveExpandState();
+      });
 
       this._initialized = true;
     }
@@ -173,21 +212,28 @@ class CustomTodoCard extends HTMLElement {
     </div>`;
   }
 
-  addTask(hass, entityId, tasks, tickCount) {
+  addTask(hass, entityId, tasks, tickCount, containsType) {
     const input = this.querySelector('#new-task-input');
+    const typeInput = this.querySelector('#new-type-input');
     const name = input?.value.trim();
+    const type = containsType ? (typeInput?.value.trim() || '') : undefined;
     if (!name) return;
     if (tasks.some(t => t.name.toLowerCase() === name.toLowerCase())) {
       alert("Task already exists."); return;
     }
     const task = {
-      name, id: `${name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`,
+      name,
+      id: `${name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`,
       checks: Array(tickCount).fill(false)
     };
+    if (containsType) task.type = type;
     this.publishTasks(hass, entityId, [...tasks, task]);
     input.value = '';
+    if (typeInput) typeInput.value = '';
     localStorage.removeItem(`custom_todo_draft_task_${this._configNameKey}`);
+    localStorage.removeItem(`custom_todo_draft_type_${this._configNameKey}`);
     this._draftNewTask = '';
+    this._draftNewType = '';
   }
 
   attachCheckboxHandlers(hass, entityId, tasks) {
