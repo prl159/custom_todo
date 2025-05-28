@@ -37,6 +37,10 @@ contains_type: true              # optional, allows task grouping
 no_grouped_columns: 2            # optional, default is 1
 ```
 
+☕ [Buy me a coffee](https://www.buymeacoffee.com/yourusername)
+
+[![Add to Home Assistant](https://my.home-assistant.io/badges/add_repository.svg)](https://my.home-assistant.io/redirect/supervisor_addons/?repository_url=https%3A%2F%2Fgithub.com%2Fpaullittledev%2Fcustom-todo-card)
+
 ---
 
 ## 🧪 Requirements
