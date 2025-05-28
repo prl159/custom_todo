@@ -100,7 +100,7 @@ class CustomTodoCard extends HTMLElement {
           background-color: var(--card-background-color);
           color: var(--primary-text-color);
         }
-        .add-task-button {
+        #add-task-button {
         	height: 57px;    
         	padding: 20px;
         }
@@ -123,11 +123,11 @@ class CustomTodoCard extends HTMLElement {
             <ha-icon icon="${config.icon || entity?.attributes?.icon || 'mdi:checkbox-marked-outline'}" class="todo-card-icon"></ha-icon>
           </div>
           <div class="card-content">
+            ${typeInputHTML}
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
-            </div>
-            ${typeInputHTML}
+            </div>            
             <div class="search-row">
               <input id="search-task-input" type="text" placeholder="Search...">
             </div>
