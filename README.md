@@ -135,7 +135,6 @@ Stored in **MQTT**:
 - [ ] Edit existing task names
 - [ ] Drag-to-reorder
 - [ ] Sort by last updated
-- [ ] Filtering by task type
 - [ ] Badge counters per section
 
 ---
