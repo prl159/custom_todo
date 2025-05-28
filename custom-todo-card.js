@@ -147,11 +147,30 @@ class CustomTodoCard extends HTMLElement {
       newTaskInput.value = this._draftNewTask;
       if (newTypeInput) newTypeInput.value = this._draftNewType;
 
+      let lastFilterValue = this._filter;
+
       searchInput.addEventListener('input', e => {
-        this._filter = e.target.value;
+        const value = e.target.value;
+        if (value === lastFilterValue) return;
+        lastFilterValue = value;
+        this._filter = value;
         this._saveExpandState();
+
         clearTimeout(this._filterDebounce);
-        this._filterDebounce = setTimeout(() => this.setHass(hass), 100);
+        this._filterDebounce = setTimeout(() => this.setHass(hass), 30);
+      });
+
+      searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const value = e.target.value;
+          if (value !== lastFilterValue) {
+            lastFilterValue = value;
+            this._filter = value;
+            this._saveExpandState();
+          }
+          clearTimeout(this._filterDebounce);
+          this.setHass(hass);
+        }
       });
 
       newTaskInput.addEventListener('input', () => {
