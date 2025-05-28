@@ -1,6 +1,5 @@
 {
   "name": "Custom Todo Card",
   "filename": "custom-todo-card.js",
-  "render_readme": true,
-  "type": "module"
+  "render_readme": true
 }
