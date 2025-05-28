@@ -9,6 +9,7 @@ class CustomTodoCard extends HTMLElement {
     this._draftNewTask = '';
     this._draftNewType = '';
     this._initialized = false;
+    this._allTasks = [];
   }
 
   set hass(hass) {
@@ -36,19 +37,14 @@ class CustomTodoCard extends HTMLElement {
     this._draftNewTask = localStorage.getItem(draftKey) || '';
     this._draftNewType = localStorage.getItem(draftTypeKey) || '';
 
-    let tasks = entity?.attributes?.tasks || [];
-    tasks = tasks.map(task => ({
+    let rawTasks = entity?.attributes?.tasks || [];
+    this._allTasks = rawTasks.map(task => ({
       ...task,
       checks: Array.isArray(task.checks)
         ? [...task.checks, ...Array(tickCount).fill(false)].slice(0, tickCount)
         : Array(tickCount).fill(false),
       id: task.id ?? `${task.name.toLowerCase().replace(/\W/g, "_")}_${Date.now()}`
     }));
-
-    if (this._filter) {
-      const kw = this._filter.toLowerCase();
-      tasks = tasks.filter(t => (t.name?.toLowerCase().includes(kw) || false));
-    }
 
     if (!this._initialized) {
       const style = document.createElement('style');
@@ -149,15 +145,21 @@ class CustomTodoCard extends HTMLElement {
 
       let lastFilterValue = this._filter;
 
+      const runSearchRender = () => {
+        const filtered = this._allTasks.filter(t =>
+          t.name?.toLowerCase().includes(this._filter.toLowerCase())
+        );
+        this.renderTaskArea(filtered, tickCount, groupCols, entityId);
+      };
+
       searchInput.addEventListener('input', e => {
         const value = e.target.value;
         if (value === lastFilterValue) return;
         lastFilterValue = value;
         this._filter = value;
         this._saveExpandState();
-
         clearTimeout(this._filterDebounce);
-        this._filterDebounce = setTimeout(() => this.setHass(hass), 30);
+        this._filterDebounce = setTimeout(runSearchRender, 30);
       });
 
       searchInput.addEventListener('keydown', e => {
@@ -169,7 +171,7 @@ class CustomTodoCard extends HTMLElement {
             this._saveExpandState();
           }
           clearTimeout(this._filterDebounce);
-          this.setHass(hass);
+          runSearchRender();
         }
       });
 
@@ -186,7 +188,7 @@ class CustomTodoCard extends HTMLElement {
       }
 
       this.querySelector('#add-task-button').addEventListener('click', () =>
-        this.addTask(hass, entityId, tasks, tickCount, containsType)
+        this.addTask(hass, entityId, [...this._allTasks], tickCount, containsType)
       );
 
       this.querySelector('.card-header')?.addEventListener('click', () => {
@@ -200,7 +202,10 @@ class CustomTodoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    this.renderTaskArea(tasks, tickCount, groupCols, entityId);
+    const filtered = this._allTasks.filter(t =>
+      t.name?.toLowerCase().includes(this._filter.toLowerCase())
+    );
+    this.renderTaskArea(filtered, tickCount, groupCols, entityId);
   }
 
   renderTaskArea(tasks, tickCount, groupCols, entityId) {
@@ -285,7 +290,10 @@ class CustomTodoCard extends HTMLElement {
       ...(containsType ? { type } : {})
     };
 
-    this.publishTasks(hass, entityId, [...tasks, task]);
+    const updatedTasks = [...tasks, task];
+    this.publishTasks(hass, entityId, updatedTasks);
+    this._allTasks = updatedTasks;
+
     input.value = '';
     if (typeInput) typeInput.value = '';
   }
@@ -306,7 +314,9 @@ class CustomTodoCard extends HTMLElement {
     this.querySelectorAll('.delete-btn').forEach(button =>
       button.addEventListener('click', e => {
         const id = e.target.dataset.id;
-        this.publishTasks(hass, entityId, tasks.filter(t => t.id !== id));
+        const updatedTasks = tasks.filter(t => t.id !== id);
+        this.publishTasks(hass, entityId, updatedTasks);
+        this._allTasks = updatedTasks;
       })
     );
   }
