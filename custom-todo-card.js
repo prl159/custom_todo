@@ -49,72 +49,24 @@ class CustomTodoCard extends HTMLElement {
     if (!this._initialized) {
       const style = document.createElement('style');
       style.textContent = `
-        .task-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 8px;
-        }
-        .task-name {
-          flex-grow: 1;
-        }
-        .checkbox-group {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .add-row,
-        .type-row {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-        .search-row {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-        .add-row input,
-        .type-row input {
-          flex: 1;
-          height: 40px;
-          font-size: 1rem;
-          padding: 8px;
+        .task-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .task-name { flex-grow: 1; }
+        .checkbox-group { display: flex; align-items: center; gap: 4px; }
+        .add-row, .type-row, .search-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .add-row input, .type-row input, .search-row input {
+          flex: 1; height: 40px; font-size: 1rem; padding: 8px;
           border: var(--input-border, 1px solid var(--divider-color));
           border-radius: var(--input-border-radius, 4px);
-          background-color: var(--card-background-color);
-          color: var(--primary-text-color);
+          background-color: var(--card-background-color); color: var(--primary-text-color);
         }
-        .add-row button {
-          height: 40px;
-          font-size: 1rem;
-          padding: 0 16px;
-        }
-        .search-row input {
-          width: 100%;
-          height: 40px;
-          font-size: 1rem;         
-          padding: 8px;        
-          border: var(--input-border, 1px solid var(--divider-color));
-          border-radius: var(--input-border-radius, 4px);
-          background-color: var(--card-background-color);
-          color: var(--primary-text-color);
-        }
-        #add-task-button {
-        	height: 57px;    
-        	padding: 20px;
-        }
-        .todo-card-icon {
-          --mdc-icon-size: 24px;
-          color: var(--primary-color);
-        }
+        .add-row button { height: 40px; font-size: 1rem; padding: 0 16px; }
+        #add-task-button { height: 57px; padding: 20px; }
+        .todo-card-icon { --mdc-icon-size: 24px; color: var(--primary-color); }
       `;
       this.appendChild(style);
 
       const typeInputHTML = containsType ? `
-        <div class="type-row">
-          <input id="new-type-input" type="text" placeholder="Type (optional)">
-        </div>` : '';
+        <div class="type-row"><input id="new-type-input" type="text" placeholder="Type (optional)"></div>` : '';
 
       this.innerHTML += `
         <ha-card>
@@ -127,7 +79,7 @@ class CustomTodoCard extends HTMLElement {
             <div class="add-row">
               <input id="new-task-input" type="text" placeholder="New task name">
               <button id="add-task-button">Add</button>
-            </div>            
+            </div>
             <div class="search-row">
               <input id="search-task-input" type="text" placeholder="Search...">
             </div>
@@ -144,7 +96,6 @@ class CustomTodoCard extends HTMLElement {
       if (newTypeInput) newTypeInput.value = this._draftNewType;
 
       let lastFilterValue = this._filter;
-
       const runSearchRender = () => {
         const filtered = this._allTasks.filter(t =>
           t.name?.toLowerCase().includes(this._filter.toLowerCase())
@@ -256,8 +207,8 @@ class CustomTodoCard extends HTMLElement {
     if (area) {
       area.innerHTML = `${inProgressHtml}${completedHtml || ''}`;
       this.attachToggleHandlers();
-      this.attachCheckboxHandlers(this._hass, entityId, [...incomplete, ...completed]);
-      this.attachDeleteButtonHandlers(this._hass, entityId, [...incomplete, ...completed]);
+      this.attachCheckboxHandlers(this._hass, entityId);
+      this.attachDeleteButtonHandlers(this._hass, entityId);
     }
   }
 
@@ -290,33 +241,35 @@ class CustomTodoCard extends HTMLElement {
       ...(containsType ? { type } : {})
     };
 
-    const updatedTasks = [...tasks, task];
-    this.publishTasks(hass, entityId, updatedTasks);
-    this._allTasks = updatedTasks;
-
+    this._allTasks.push(task);
+    this.publishTasks(hass, entityId, this._allTasks);
     input.value = '';
     if (typeInput) typeInput.value = '';
   }
 
-  attachCheckboxHandlers(hass, entityId, tasks) {
+  attachCheckboxHandlers(hass, entityId) {
     this.querySelectorAll('input[type="checkbox"]').forEach(input => {
       input.addEventListener('change', e => {
         const id = e.target.dataset.id, check = +e.target.dataset.check;
-        const task = tasks.find(t => t.id === id);
+        const task = this._allTasks.find(t => t.id === id);
         if (!task) return;
         task.checks[check] = e.target.checked;
-        this.publishTasks(hass, entityId, tasks);
+        this.publishTasks(hass, entityId, this._allTasks);
       });
     });
   }
 
-  attachDeleteButtonHandlers(hass, entityId, tasks) {
+  attachDeleteButtonHandlers(hass, entityId) {
     this.querySelectorAll('.delete-btn').forEach(button =>
       button.addEventListener('click', e => {
         const id = e.target.dataset.id;
-        const updatedTasks = tasks.filter(t => t.id !== id);
-        this.publishTasks(hass, entityId, updatedTasks);
-        this._allTasks = updatedTasks;
+        this._allTasks = this._allTasks.filter(t => t.id !== id);
+        this.publishTasks(hass, entityId, this._allTasks);
+
+        const filtered = this._allTasks.filter(t =>
+          t.name?.toLowerCase().includes(this._filter.toLowerCase())
+        );
+        this.renderTaskArea(filtered, Number(this._config.no_of_ticks || 1), this._config.no_grouped_columns || 1, entityId);
       })
     );
   }
