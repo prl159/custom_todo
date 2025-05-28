@@ -73,6 +73,11 @@ class CustomTodoCard extends HTMLElement {
           gap: 8px;
           margin-bottom: 8px;
         }
+        .search-row {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
         .add-row input,
         .type-row input {
           flex: 1;
@@ -93,8 +98,8 @@ class CustomTodoCard extends HTMLElement {
           width: 100%;
           height: 40px;
           font-size: 1rem;
-          padding: 8px;
-          margin-bottom: 8px;
+          padding-top: 8px;
+          padding-left: 8px;          
           border: var(--input-border, 1px solid var(--divider-color));
           border-radius: var(--input-border-radius, 4px);
           background-color: var(--card-background-color);
