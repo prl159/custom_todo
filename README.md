@@ -36,6 +36,7 @@ no_of_ticks: 3                   # optional, default is 1
 contains_type: true              # optional, allows task grouping
 no_grouped_columns: 2            # optional, default is 1
 ```
+---
 
 <a href="https://www.buymeacoffee.com/paullittlek" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
