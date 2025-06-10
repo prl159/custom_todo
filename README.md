@@ -40,6 +40,8 @@ no_grouped_columns: 2            # optional, default is 1
 
 <a href="https://www.buymeacoffee.com/paullittlek" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
+<p><a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=prl159&amp;repository=custom-todo" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open your Home Assistant instance and open the lovelace-horizon-card project inside the Home Assistant Community Store."></a></p>
+
 ---
 
 ## 🧪 Requirements
